@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mimic</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="wordmark">Mimic</div>
+    <div class="gpu">
+      <div class="engines" role="group" aria-label="Engine" id="engineBtns"></div>
+      <div class="vram">
+        <div class="bar" aria-hidden="true"><span class="fill"></span><span class="ghost"></span></div>
+        <div class="vram-text" id="vramText"></div>
+      </div>
+      <div class="hint" id="hint"></div>
+    </div>
+    <div class="top-actions">
+      <button class="quiet settings-btn" id="settingsBtn" title="Settings (Ctrl ,)">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 8h2M8 8h6M2 12h8M14 12h0"/><circle cx="11" cy="4" r="1.8"/><circle cx="6" cy="8" r="1.8"/><circle cx="12" cy="12" r="1.8"/></svg>
+        Settings
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="col col-voices" aria-label="Voice profiles">
+      <div class="col-head"><h2>Voices</h2><span class="meta" id="voiceCount"></span></div>
+      <div class="scroll" id="voiceList" role="listbox" aria-label="Voice profiles"></div>
+      <div class="voice-detail" id="voiceDetail"></div>
+      <div class="voice-add">
+        <button class="btn" id="recordBtn">Record</button>
+        <button class="btn" id="importBtn">Import file</button>
+      </div>
+    </section>
+
+    <section class="col col-script" aria-label="Script">
+      <div class="col-head script-head">
+        <h2>Script</h2>
+        <button class="chip drop" data-menu="sound" aria-expanded="false" title="Adds a sound at the cursor">Add sound</button>
+        <span class="meta" id="charCount"></span>
+      </div>
+      <div class="script" id="script" contenteditable="true" spellcheck="true">Hello. This is a quick test of the voice. Pretty good, right?</div>
+      <div class="composer">
+        <p class="recipe" id="recipe"></p>
+        <p class="preflight" id="preflight"></p>
+        <input class="instr" id="instr" hidden>
+        <div class="composer-actions">
+          <div class="links">
+            <button class="link" id="compareBtn">Compare engines</button>
+            <button class="link" data-menu="options" aria-expanded="false">Options</button>
+          </div>
+          <button class="btn live" id="genBtn">Generate <kbd>Ctrl Enter</kbd></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="col col-takes" aria-label="Takes">
+      <div class="col-head">
+        <h2>Takes</h2>
+        <div class="row"><span class="meta" id="unsaved"></span><button class="quiet" id="blindBtn" aria-pressed="false">Blind <kbd>B</kbd></button></div>
+      </div>
+      <div class="scroll" id="takeList" role="listbox" aria-label="Takes"></div>
+      <p class="takes-note">Takes stay in a temporary cache until you save them. Unsaved takes are cleared when Mimic closes.</p>
+    </section>
+  </main>
+
+  <footer class="status">
+    <span id="log">Starting…</span>
+    <span id="idle"></span>
+  </footer>
+</div>
+
+<div class="menu" id="menu" role="menu"></div>
+
+<div class="overlay" id="settingsDlg">
+  <div class="dialog settings" role="dialog" aria-label="Settings">
+    <div class="set-head"><h3>Settings</h3>
+      <button class="btn icon" id="settingsClose" aria-label="Close settings" title="Close (Esc)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </div>
+    <div class="set-body" id="settingsBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="palette">
+  <div class="dialog" role="dialog" aria-label="Commands">
+    <input class="palette-input" id="paletteInput" placeholder="Type a command" autocomplete="off">
+    <ul class="palette-list" id="paletteList"></ul>
+  </div>
+</div>
+
+<div class="overlay" id="recorder">
+  <div class="dialog rec" role="dialog" aria-label="Record a voice">
+    <h3>Record a voice</h3>
+    <p class="why">Read this aloud. Mimic already knows the words, so the transcript is exact and every engine can use the clip straight away.</p>
+    <p class="read" id="passage">The quick spring rain had stopped by noon, so we walked down to the harbor and counted the boats coming in, one by one, until the light went orange.</p>
+    <div class="level"><span id="level"></span></div>
+    <div class="rec-foot">
+      <span class="rec-time" id="recTime">0.0 s of 8 to 20 s</span>
+      <div class="row"><button class="btn" id="recCancel">Cancel</button><button class="btn live" id="recToggle">Start recording</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="enginesDlg">
+  <div class="dialog eng" role="dialog" aria-label="Engines">
+    <div class="eng-head"><h3>Engines</h3></div>
+    <p class="machine" id="machine"></p>
+    <div class="eng-list" id="engList"></div>
+    <p class="eng-foot" id="sttLine"></p>
+    <p class="eng-foot">VRAM figures were measured on an RTX 5070 Ti and can differ a little on other cards. The bar at the top shows what this PC is really using.</p>
+  </div>
+</div>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

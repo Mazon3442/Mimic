@@ -1,0 +1,1248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mimic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<style>
+/* Mimic mockup. Sample profiles and takes; timings are shortened; there is no audio. */
+:root {
+  --ground: #111213;
+  --surface: #18191b;
+  --surface-2: #202124;
+  --surface-3: #2a2b2f;
+  --ink: #ecede9;
+  --ink-2: #a9aba6;
+  --ink-3: #7a7c7f;
+  --live: #ff4733;
+  --live-ink: #160403;
+  --ready: #7fcb8a;
+  --warn: #e9b44c;
+  --wave: #55585d;
+  --vram-os: #3b3d42;
+  --field: #141517;
+  --field-line: #34363a;
+
+  --r-sm: 4px;
+  --r: 6px;
+  --r-lg: 10px;
+
+  --ui: "IBM Plex Sans", system-ui, sans-serif;
+  --script: "Newsreader", Georgia, serif;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --ground: #f4f4f1;
+  --surface: #eaeae6;
+  --surface-2: #e0e0db;
+  --surface-3: #d4d4ce;
+  --ink: #141516;
+  --ink-2: #4f5154;
+  --ink-3: #75777a;
+  --live: #dc2f1c;
+  --live-ink: #ffffff;
+  --ready: #2c8442;
+  --warn: #9a6400;
+  --wave: #a4a6a7;
+  --vram-os: #c3c3bd;
+  --field: #f9f9f7;
+  --field-line: #c9c9c3;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font: 400 14px/1.45 var(--ui);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+::selection { background: var(--live); color: var(--live-ink); }
+
+.app { height: 100vh; min-width: 1120px; display: grid; grid-template-rows: auto 1fr auto; }
+
+/* ---------- top bar: the memory bar is the engine picker ---------- */
+.top {
+  display: grid; grid-template-columns: 300px 1fr auto; align-items: center;
+  background: var(--surface); padding: 14px 20px 14px 22px; gap: 24px;
+}
+.wordmark { font: 500 26px/1 var(--script); letter-spacing: -0.02em; }
+.gpu { display: grid; gap: 8px; }
+.engines { display: flex; gap: 4px; flex-wrap: wrap; }
+.engine {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: var(--r);
+  color: var(--ink-2); transition: background-color 120ms ease, transform 120ms var(--ease-out);
+}
+.engine:active { transform: scale(0.97); }
+.engine b { font-weight: 600; color: var(--ink); }
+.engine[aria-pressed="true"] { background: var(--surface-3); }
+.engine[data-fit="no"] b, .engine[data-fit="no"] { color: var(--ink-3); }
+.engine .state { font-size: 12px; }
+.engine .state[data-s="warm"] { color: var(--ready); }
+.engine .state[data-s="loading"], .engine .state[data-s="unloading"] { color: var(--warn); }
+.engine .state[data-s="nofit"] { color: var(--ink-3); }
+.engine.more { color: var(--ink-2); }
+@media (hover: hover) and (pointer: fine) { .engine:hover { background: var(--surface-2); } .engine[aria-pressed="true"]:hover { background: var(--surface-3); } }
+
+.vram { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
+.bar { position: relative; height: 10px; background: var(--surface-3); border-radius: 5px; overflow: hidden; }
+.bar > span { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; transform-origin: left center; }
+.bar .os { background: var(--vram-os); }
+.bar .fill { background: var(--ink); transition: transform 260ms var(--ease-in-out); }
+.bar .ghost { box-shadow: inset 0 0 0 2px var(--live); border-radius: 5px; opacity: 0; transition: opacity 120ms ease; }
+.bar .ghost.on { opacity: 1; }
+.vram-text { color: var(--ink-2); white-space: nowrap; min-width: 250px; text-align: right; }
+.vram-text b { color: var(--ink); font-weight: 600; }
+.hint { color: var(--ink-3); font-size: 12px; min-height: 17px; }
+.hint.alert { color: var(--warn); }
+
+.top-actions { display: flex; gap: 6px; align-items: center; }
+.quiet { padding: 6px 10px; border-radius: var(--r); color: var(--ink-2); transition: background-color 120ms ease, transform 120ms var(--ease-out); }
+.quiet:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .quiet:hover { background: var(--surface-2); color: var(--ink); } }
+.settings-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; }
+.settings-btn svg { width: 16px; height: 16px; }
+.btn.icon { width: 32px; height: 30px; padding: 0; display: inline-grid; place-items: center; }
+.btn.icon svg { width: 14px; height: 14px; }
+kbd { font: 500 11px/1 var(--ui); padding: 3px 5px; border-radius: var(--r-sm); background: var(--surface-3); color: var(--ink-2); }
+
+/* ---------- main regions, separated by tone ---------- */
+.main { display: grid; grid-template-columns: 300px 1fr 420px; min-height: 0; }
+.col { min-height: 0; display: flex; flex-direction: column; }
+.col-voices, .col-takes { background: var(--surface); }
+.col-head { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 22px 10px; }
+.col-head h2 { font: 600 15px/1.2 var(--ui); }
+.col-head .meta { color: var(--ink-3); font-size: 12px; }
+.scroll { overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 8px; }
+
+/* rows are inset slightly so the rounding reads */
+.voice, .take { margin: 2px 10px; width: calc(100% - 20px); border-radius: var(--r); padding: 11px 12px; text-align: left; transition: background-color 120ms ease; }
+.voice[aria-selected="true"], .take[aria-selected="true"] { background: var(--surface-3); }
+@media (hover: hover) and (pointer: fine) {
+  .voice:hover, .take:hover { background: var(--surface-2); }
+  .voice[aria-selected="true"]:hover, .take[aria-selected="true"]:hover { background: var(--surface-3); }
+}
+
+/* profiles */
+.voice { display: grid; gap: 4px; }
+.voice-top { display: flex; justify-content: space-between; align-items: baseline; }
+.voice-name { font-weight: 600; font-size: 15px; }
+.voice-dur { color: var(--ink-3); font-size: 12px; }
+.voice canvas { width: 100%; height: 22px; display: block; }
+.voice-ready { font-size: 12px; color: var(--ink-2); }
+.voice-ready.warn { color: var(--warn); }
+.voice-ready.busy { color: var(--ink-3); }
+
+.voice-detail { margin: 6px 10px 0; padding: 14px 12px 14px; background: var(--surface-2); border-radius: var(--r-lg); display: grid; gap: 10px; }
+.voice-detail label, .field-label { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; }
+.voice-detail .ok { color: var(--ready); }
+.voice-detail .no { color: var(--warn); }
+.voice-detail .busy { color: var(--ink-3); }
+input.name { width: 100%; padding: 6px 9px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); font-weight: 600; font-size: 15px; }
+textarea.transcript { width: 100%; min-height: 76px; resize: vertical; padding: 8px 10px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); line-height: 1.45; }
+textarea.transcript:disabled { color: var(--ink-3); }
+.defaults { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; }
+.defaults b { color: var(--ink); font-weight: 500; }
+.defaults .btn { white-space: nowrap; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.voice-add { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 10px 16px; }
+
+.btn {
+  padding: 7px 12px; border-radius: var(--r); background: var(--surface-3); color: var(--ink); font-weight: 500;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms var(--ease-out), opacity 120ms ease;
+}
+.btn:active:not(:disabled) { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.live { background: var(--live); color: var(--live-ink); }
+.btn.live:disabled { background: var(--surface-3); color: var(--ink-3); opacity: 1; }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+@media (hover: hover) and (pointer: fine) { .btn:hover:not(:disabled) { background: var(--ink); color: var(--ground); } .btn.live:hover:not(:disabled) { background: var(--live); filter: brightness(1.08); color: var(--live-ink); } }
+
+/* script */
+.col-script { padding: 0 48px 28px; }
+.col-script .col-head { padding-left: 0; padding-right: 0; }
+.script { font: 400 var(--script-size, 34px)/1.42 var(--script); letter-spacing: -0.01em; max-width: 28em; flex: 1; overflow-y: auto; min-height: 120px; padding: 6px 0 18px; outline: none; caret-color: var(--live); }
+.script:empty::before { content: "Type what the voice should say."; color: var(--ink-3); }
+.tag { display: inline-block; font: 500 15px/1 var(--ui); vertical-align: 0.35em; padding: 5px 8px; margin: 0 2px; border-radius: var(--r); background: var(--surface-3); color: var(--ink-2); user-select: all; }
+.script-head { gap: 16px; align-items: center; }
+.script-head h2 { margin-right: auto; }
+.tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.chip { padding: 4px 10px; border-radius: var(--r); background: var(--surface); color: var(--ink-2); font-size: 13px; transition: transform 120ms var(--ease-out), background-color 120ms ease, color 120ms ease; }
+.chip:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .chip:hover { background: var(--surface-3); color: var(--ink); } }
+.chip.drop { padding: 5px 10px 5px 12px; }
+.chip.drop::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-3px) rotate(45deg); }
+.chip.drop[aria-expanded="true"] { background: var(--surface-3); color: var(--ink); }
+.tag.skip { background: transparent; box-shadow: inset 0 0 0 1px var(--ink-3); color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+
+/* composer: one panel that says what will happen, and the button that does it */
+.composer { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "recipe recipe" "instr instr" "status actions"; gap: 12px 24px; align-items: center; background: var(--surface-2); border-radius: var(--r-lg); padding: 16px 16px 16px 20px; margin-top: 18px; }
+.recipe { grid-area: recipe; }
+.preflight { grid-area: status; }
+.instr { grid-area: instr; }
+.composer-actions { grid-area: actions; }
+.recipe { font-size: 17px; color: var(--ink-2); line-height: 1.6; }
+.token { font: 600 17px/1.2 var(--ui); color: var(--ink); padding: 3px 8px; margin: 0 1px; border-radius: var(--r); background: var(--surface-3); transition: background-color 120ms ease, transform 120ms var(--ease-out); }
+.token::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 7px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: translateY(-3px) rotate(45deg); }
+.token:active { transform: scale(0.97); }
+.token[aria-expanded="true"] { background: var(--ink); color: var(--ground); }
+@media (hover: hover) and (pointer: fine) { .token:hover { background: var(--ink); color: var(--ground); } }
+.preflight { color: var(--ink-3); font-size: 13px; min-height: 19px; }
+.preflight.block { color: var(--warn); }
+.preflight.wait { color: var(--ink-2); }
+.preflight button { text-decoration: underline; text-underline-offset: 3px; color: inherit; padding: 0; }
+.instr { width: 100%; padding: 8px 10px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); }
+.instr[hidden] { display: none; }
+.composer-actions { display: flex; gap: 16px; align-items: center; }
+.composer-actions .btn.live { padding: 12px 20px; font-size: 15px; }
+.composer-actions .btn kbd { margin-left: 8px; background: rgba(0,0,0,.18); color: inherit; }
+.links { display: flex; gap: 14px; }
+.link { color: var(--ink-2); font-size: 13px; padding: 2px 0; }
+.link:disabled { color: var(--ink-3); cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) { .link:hover:not(:disabled) { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; } }
+
+/* menus open from their trigger */
+.menu { position: fixed; z-index: 10; min-width: 260px; max-width: 360px; padding: 6px; background: var(--surface-3); border-radius: var(--r-lg); box-shadow: 0 16px 40px rgba(0,0,0,.4); display: none;
+  transform-origin: var(--origin, bottom left); transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
+.menu.open { display: block; @starting-style { opacity: 0; transform: scale(0.97); } }
+.menu-title { padding: 8px 10px 6px; color: var(--ink-3); font-size: 12px; }
+.mi { display: grid; gap: 1px; width: 100%; text-align: left; padding: 8px 10px; border-radius: var(--r); }
+.mi b { font-weight: 600; display: flex; justify-content: space-between; gap: 12px; }
+.mi b em { font-style: normal; font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.mi span { color: var(--ink-2); font-size: 12px; }
+.mi[aria-checked="true"] { background: var(--surface-2); }
+.mi:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (hover: hover) and (pointer: fine) { .mi:hover:not(:disabled) { background: var(--ground); } }
+.menu-sep { height: 6px; }
+.opt { padding: 8px 10px 10px; display: grid; gap: 8px; }
+.opt .row { flex-wrap: nowrap; }
+.opt p { color: var(--ink-2); font-size: 12px; }
+input.num { width: 110px; padding: 6px 9px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); }
+
+/* takes */
+.take { display: grid; gap: 6px; }
+.take-top { display: flex; justify-content: space-between; gap: 12px; }
+.take-name { font-weight: 600; }
+.take-name .who { font-weight: 400; color: var(--ink-2); }
+.badge { margin-left: 8px; padding: 1px 7px; border-radius: var(--r-sm); background: var(--surface-2); font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.badge.saved { color: var(--ink); }
+.take-dur { color: var(--ink-3); white-space: nowrap; }
+.take canvas { width: 100%; height: 38px; display: block; cursor: pointer; }
+.take canvas.reveal { animation: reveal 340ms var(--ease-out) both; }
+@keyframes reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.take-text { font: 400 16px/1.4 var(--script); color: var(--ink-2); display: none; }
+.take-path { font-size: 12px; color: var(--ink-3); display: none; }
+.take[aria-selected="true"] .take-text, .take[aria-selected="true"] .take-path { display: block; }
+.take-actions { display: none; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.take[aria-selected="true"] .take-actions { display: flex; }
+.take-actions .btn { white-space: nowrap; }
+.take-actions .btn kbd { margin-left: 6px; }
+.take-actions [data-act="delete"] { margin-left: auto; }
+.group { padding: 16px 22px 4px; color: var(--ink-2); font-size: 12px; }
+.progress { height: 38px; position: relative; background: var(--surface-2); border-radius: var(--r); overflow: hidden; }
+.progress > span { position: absolute; inset: 0; background: var(--live); transform-origin: left; transform: scaleX(0); }
+.take-status { color: var(--warn); font-size: 12px; }
+.empty { padding: 8px 22px 22px; color: var(--ink-2); max-width: 30em; }
+.takes-note { padding: 10px 22px 16px; color: var(--ink-3); font-size: 12px; }
+
+.status { display: flex; justify-content: space-between; gap: 20px; padding: 7px 22px; background: var(--surface-2); color: var(--ink-2); font-size: 12px; }
+.status .note { color: var(--ink-3); }
+
+/* dialogs float, so they may cast a shadow */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.overlay.open { display: flex; }
+.dialog { width: 560px; background: var(--surface-2); border-radius: var(--r-lg); box-shadow: 0 24px 60px rgba(0,0,0,.45); transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); @starting-style { opacity: 0; transform: scale(0.97); } }
+.palette-input { width: 100%; padding: 16px 18px; background: transparent; border: 0; outline: none; font-size: 16px; }
+.palette-list { list-style: none; padding: 0 6px 6px; max-height: 340px; overflow: auto; }
+.palette-list li { padding: 9px 12px; border-radius: var(--r); display: flex; justify-content: space-between; color: var(--ink-2); cursor: pointer; }
+.palette-list li[aria-selected="true"] { background: var(--surface-3); color: var(--ink); }
+.palette-list li span:last-child { color: var(--ink-3); font-size: 12px; }
+#palette .dialog { transition: none; } /* keyboard-opened, so no animation */
+
+.rec { padding: 22px 24px 24px; display: grid; gap: 16px; }
+.rec h3, .eng h3 { font: 600 17px/1.2 var(--ui); }
+.rec p.read { font: 400 22px/1.45 var(--script); }
+.rec .why { color: var(--ink-2); }
+.level { height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+.level > span { display: block; height: 100%; background: var(--live); transform-origin: left; transform: scaleX(0); transition: transform 90ms linear; }
+.rec-foot { display: flex; justify-content: space-between; align-items: center; }
+.rec-time { color: var(--ink-2); }
+
+/* engines catalog */
+.eng { width: 900px; padding: 22px 24px 24px; display: grid; gap: 16px; }
+.eng-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.eng .machine { color: var(--ink-2); }
+.eng .machine b { color: var(--ink); font-weight: 600; }
+.eng-list { display: grid; gap: 4px; max-height: 52vh; overflow: auto; }
+.eng-row { display: grid; grid-template-columns: 1.3fr 1.1fr 1.4fr 150px; gap: 14px; align-items: center; padding: 11px 12px; border-radius: var(--r); background: var(--surface); }
+.eng-row .n { font-weight: 600; }
+.eng-row .sub { color: var(--ink-3); font-size: 12px; }
+.eng-row .fit { font-size: 13px; }
+.eng-row .fit.yes { color: var(--ready); }
+.eng-row .fit.no { color: var(--ink-3); }
+.eng-row .fit.rec { color: var(--ready); font-weight: 500; }
+.eng-foot { color: var(--ink-3); font-size: 12px; }
+
+/* settings */
+.settings { width: 680px; max-height: 80vh; display: grid; grid-template-rows: auto 1fr; overflow: hidden; }
+.set-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px 10px 24px; }
+.set-head h3 { font: 600 17px/1.2 var(--ui); }
+.set-body { overflow-y: auto; padding: 0 24px 24px; }
+.set-section { margin-top: 18px; }
+.set-section h4 { font: 600 13px/1.2 var(--ui); color: var(--ink-2); margin-bottom: 6px; }
+.set-group { background: var(--surface); border-radius: var(--r-lg); padding: 4px 0; }
+.set-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; padding: 10px 14px; }
+.set-row .t { font-weight: 500; }
+.set-row .d { color: var(--ink-3); font-size: 12px; margin-top: 1px; }
+.set-row .path { color: var(--ink-2); font-size: 13px; margin-right: 8px; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: var(--r); padding: 2px; }
+.seg button { padding: 5px 10px; border-radius: var(--r-sm); color: var(--ink-2); font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); }
+select.sel { padding: 6px 28px 6px 10px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); appearance: none; font-size: 13px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+.switch { width: 36px; height: 20px; border-radius: 10px; background: var(--surface-3); position: relative; transition: background-color 150ms ease; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink-2); transition: transform 150ms var(--ease-out), background-color 150ms ease; }
+.switch[aria-checked="true"] { background: var(--ink); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--ground); }
+.keys { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; padding: 10px 14px 12px; color: var(--ink-2); font-size: 13px; }
+.keys kbd { justify-self: end; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bar .fill, .dialog { transition: opacity 150ms ease; }
+  .take canvas.reveal { animation: none; }
+  .btn:active, .chip:active, .engine:active, .quiet:active { transform: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="wordmark">Mimic</div>
+    <div class="gpu">
+      <div class="engines" role="group" aria-label="Engine" id="engineBtns"></div>
+      <div class="vram">
+        <div class="bar" aria-hidden="true"><span class="fill"></span><span class="os"></span><span class="ghost"></span></div>
+        <div class="vram-text" id="vramText"></div>
+      </div>
+      <div class="hint" id="hint"></div>
+    </div>
+    <div class="top-actions">
+      <button class="quiet settings-btn" id="settingsBtn" title="Settings (Ctrl ,)">
+        <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 8h2M8 8h6M2 12h8M14 12h0"/><circle cx="11" cy="4" r="1.8"/><circle cx="6" cy="8" r="1.8"/><circle cx="12" cy="12" r="1.8"/></svg>
+        Settings
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="col col-voices" aria-label="Voice profiles">
+      <div class="col-head"><h2>Voices</h2><span class="meta" id="voiceCount"></span></div>
+      <div class="scroll" id="voiceList" role="listbox" aria-label="Voice profiles"></div>
+      <div class="voice-detail" id="voiceDetail"></div>
+      <div class="voice-add">
+        <button class="btn" id="recordBtn">Record</button>
+        <button class="btn" id="importBtn">Import file</button>
+      </div>
+    </section>
+
+    <section class="col col-script" aria-label="Script">
+      <div class="col-head script-head">
+        <h2>Script</h2>
+        <button class="chip drop" data-menu="sound" aria-expanded="false" title="Adds a sound at the cursor">Add sound</button>
+        <span class="meta" id="charCount"></span>
+      </div>
+      <div class="script" id="script" contenteditable="true" spellcheck="true">Hello. This is a quick test of the voice. <span class="tag" contenteditable="false" data-tag="laugh">laugh</span> Pretty good, right?</div>
+      <div class="composer">
+        <p class="recipe" id="recipe"></p>
+        <p class="preflight" id="preflight"></p>
+        <input class="instr" id="instr" hidden placeholder="Describe the voice, e.g. warm, slow, a little husky">
+        <div class="composer-actions">
+          <div class="links">
+            <button class="link" id="compareBtn">Compare engines</button>
+            <button class="link" data-menu="options" aria-expanded="false">Options</button>
+          </div>
+          <button class="btn live" id="genBtn">Generate <kbd>Ctrl Enter</kbd></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="col col-takes" aria-label="Takes">
+      <div class="col-head">
+        <h2>Takes</h2>
+        <div class="row"><span class="meta" id="unsaved"></span><button class="quiet" id="blindBtn" aria-pressed="false">Blind <kbd>B</kbd></button></div>
+      </div>
+      <div class="scroll" id="takeList" role="listbox" aria-label="Takes"></div>
+      <p class="takes-note">Takes stay in a temporary cache until you save them. Unsaved takes are cleared when Mimic closes.</p>
+    </section>
+  </main>
+
+  <footer class="status">
+    <span id="log">Ready.</span>
+    <span><span id="idle"></span> <span class="note">Mockup: sample profiles and takes, shortened timings, no audio.</span></span>
+  </footer>
+</div>
+
+<div class="menu" id="menu" role="menu"></div>
+
+<div class="overlay" id="settingsDlg">
+  <div class="dialog settings" role="dialog" aria-label="Settings">
+    <div class="set-head"><h3>Settings</h3>
+      <button class="btn icon" id="settingsClose" aria-label="Close settings" title="Close (Esc)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+    </div>
+    <div class="set-body" id="settingsBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="palette">
+  <div class="dialog" role="dialog" aria-label="Commands">
+    <input class="palette-input" id="paletteInput" placeholder="Type a command" autocomplete="off">
+    <ul class="palette-list" id="paletteList"></ul>
+  </div>
+</div>
+
+<div class="overlay" id="recorder">
+  <div class="dialog rec" role="dialog" aria-label="Record a voice">
+    <h3>Record a voice</h3>
+    <p class="why">Read this aloud. Mimic already knows the words, so the transcript is exact and every engine can use the clip straight away.</p>
+    <p class="read">The quick spring rain had stopped by noon, so we walked down to the harbor and counted the boats coming in, one by one, until the light went orange.</p>
+    <div class="level"><span id="level"></span></div>
+    <div class="rec-foot">
+      <span class="rec-time" id="recTime">0.0 s of 8 to 20 s</span>
+      <div class="row"><button class="btn" id="recCancel">Cancel</button><button class="btn live" id="recToggle">Start recording</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="enginesDlg">
+  <div class="dialog eng" role="dialog" aria-label="Engines">
+    <div class="eng-head">
+      <h3>Engines</h3>
+      <div class="row"><span class="field-label">Mockup: try a smaller PC</span>
+        <div class="seg" id="hwSeg"><button data-hw="big">16 GB GPU</button><button data-hw="small">6 GB GPU</button><button data-hw="cpu">No GPU</button></div>
+      </div>
+    </div>
+    <p class="machine" id="machine"></p>
+    <div class="eng-list" id="engList"></div>
+    <p class="eng-foot" id="sttLine"></p>
+    <p class="eng-foot">Memory figures are estimates until Mimic measures them on your machine the first time each engine loads.</p>
+  </div>
+</div>
+
+<script>
+// ---------- hardware (detected in the real app; switchable in the mockup) ----------
+const HW = {
+  big:   { label: "RTX 5070 Ti, 16 GB VRAM, 32 GB RAM", vram: 16, os: 1.4, ram: 32 },
+  small: { label: "6 GB GPU, 16 GB RAM", vram: 6, os: 0.8, ram: 16 },
+  cpu:   { label: "No GPU, 8 GB RAM", vram: 0, os: 0, ram: 8, osRam: 3.2 },
+};
+
+// ---------- engines (sizes are estimates; Mimic measures them on first load) ----------
+const ENGINES = {
+  kitten:     { name: "Kitten", full: "KittenTTS 2", device: "gpu", gb: 5.2, transcript: false, installed: true, size: "3.4 GB", license: "open", load: 1400, gen: 1300, real: "about 21 s to load", tag: t => `<${t}>`, has: ["laugh", "sigh", "breath", "pause"] },
+  breeze:     { name: "Breeze", full: "Breeze TTS 2", device: "gpu", gb: 8.1, transcript: true, installed: true, size: "6.2 GB", license: "non-commercial", load: 1800, gen: 1600, real: "35 to 40 s to load", tag: t => `(${t})`, has: ["laugh", "sigh", "breath"] },
+  fish:       { name: "Fish", full: "Fish S2 Pro (WSL server)", device: "gpu", gb: 14.3, transcript: true, installed: true, size: "11 GB", license: "research", load: 2600, gen: 2200, real: "about 90 s to start the server", tag: t => `<${t}>`, has: ["laugh", "sigh", "pause", "excited", "breath"] },
+  chatterbox: { name: "Chatterbox", full: "Chatterbox Turbo, 350M", device: "gpu", gb: 4.0, transcript: false, installed: false, size: "1.4 GB", license: "MIT", load: 900, gen: 900, real: "a few seconds to load", tag: t => `[${t}]`, has: ["laugh", "sigh"] },
+  qwen:       { name: "Qwen3-TTS", full: "Qwen3-TTS 0.6B", device: "gpu", gb: 4.5, transcript: true, installed: false, size: "1.8 GB", license: "Apache 2.0", load: 1000, gen: 1100, real: "a few seconds to load", tag: t => "", has: [] },
+  neutts:     { name: "NeuTTS", full: "NeuTTS Air, Q4 (CPU)", device: "cpu", gb: 0.7, transcript: true, installed: false, size: "0.5 GB", license: "Apache 2.0", load: 700, gen: 2400, real: "a couple of seconds to load", tag: t => "", has: [] },
+};
+const ALL = Object.keys(ENGINES);
+
+const profiles = [
+  { id: "mason", name: "Mason", dur: 14.1, tx: "auto", transcript: "Sample transcript of the reference clip, word for word.", seed: 11,
+    defaults: { engine: "breeze", kittenStyle: "Expressive", breezeMode: "Clone", seed: 4471 } },
+  { id: "narrator", name: "Narrator", dur: 9.8, tx: "none", transcript: "", seed: 23,
+    defaults: { engine: "fish", kittenStyle: "Plain", breezeMode: "Clone", seed: 120 } },
+  { id: "hey", name: "Hey", dur: 3.4, tx: "auto", transcript: "Hey, what's up?", seed: 37, short: true, defaults: { engine: "kitten", kittenStyle: "Plain", breezeMode: "Clone", seed: 7 } },
+  { id: "bruno", name: "Bruno", builtin: "kitten", seed: 41, defaults: { engine: "kitten", kittenStyle: "Expressive", breezeMode: "Clone", seed: 1 } },
+];
+let takes = [
+  { id: 1, n: 1, engine: "kitten", voice: "bruno", dur: 3.5, made: 6.8, text: "Hello. This is a quick test of the voice. <laugh> Pretty good, right?", seed: 101, saved: null },
+  { id: 2, n: 2, engine: "kitten", voice: "mason", dur: 3.9, made: 7.4, text: "Hello. This is a quick test of the voice. <laugh> Pretty good, right?", seed: 102, saved: null },
+  { id: 3, n: 3, engine: "breeze", voice: "mason", dur: 4.2, made: 9.1, text: "Hello. This is a quick test of the voice. (laugh) Pretty good, right?", seed: 103, saved: "Documents\\Mimic\\Mason - Breeze - take 3.wav" },
+];
+
+const state = {
+  hw: "big", engine: "breeze", resident: "breeze",
+  engineState: Object.fromEntries(ALL.map(id => [id, id === "breeze" ? "warm" : "cold"])),
+  voice: "mason", take: 3, blind: false, busy: false, cancel: false,
+  playing: null, playStart: 0, playFrom: 0, idleAt: Date.now() + 10 * 60e3,
+  kittenStyle: "Expressive", breezeMode: "Clone", seed: 4471, nextN: 4, compareN: 1,
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const log = msg => ($("#log").textContent = msg);
+const hw = () => HW[state.hw];
+const voiceById = id => profiles.find(x => x.id === id);
+
+// ---------- fit ----------
+function fit(id) {
+  const e = ENGINES[id], h = hw();
+  if (e.device === "cpu") return (h.ram - (h.osRam || 4)) >= e.gb ? { ok: true } : { ok: false, why: `needs ${e.gb} GB of free RAM` };
+  if (!h.vram) return { ok: false, why: "needs a GPU" };
+  return h.os + e.gb <= h.vram ? { ok: true } : { ok: false, why: `needs ${e.gb.toFixed(1)} GB of VRAM; this GPU has ${h.vram} GB` };
+}
+function recommended() {
+  // Best installed-or-not engine that fits: prefer the most capable GPU engine, else CPU.
+  const order = ["fish", "breeze", "kitten", "qwen", "chatterbox", "neutts"];
+  return order.find(id => fit(id).ok);
+}
+
+// ---------- waveform from seeded speech-like peaks ----------
+function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const peakCache = new Map();
+function peaks(seed, n) {
+  const key = seed + ":" + n;
+  if (peakCache.has(key)) return peakCache.get(key);
+  const r = rng(seed), out = [];
+  while (out.length < n) {
+    const syl = 3 + Math.floor(r() * 7), amp = 0.35 + r() * 0.65;
+    for (let i = 0; i < syl && out.length < n; i++) out.push(amp * Math.sin(Math.PI * (i + 0.5) / syl) * (0.7 + r() * 0.3));
+    const gap = r() < 0.18 ? 4 + Math.floor(r() * 5) : Math.floor(r() * 2);
+    for (let i = 0; i < gap && out.length < n; i++) out.push(0.03 + r() * 0.03);
+  }
+  peakCache.set(key, out);
+  return out;
+}
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function drawWave(canvas, seed, played = 0) {
+  const dpr = devicePixelRatio || 1, w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext("2d"); g.scale(dpr, dpr);
+  const step = 3, n = Math.floor(w / step), p = peaks(seed, n);
+  const base = cssVar("--wave"), live = cssVar("--live"), ink = cssVar("--ink-2");
+  for (let i = 0; i < n; i++) {
+    const bh = Math.max(1.5, p[i] * h);
+    g.fillStyle = i / n < played ? live : (played > 0 ? ink : base);
+    g.beginPath(); g.roundRect ? g.roundRect(i * step, (h - bh) / 2, 2, bh, 1) : g.rect(i * step, (h - bh) / 2, 2, bh); g.fill();
+  }
+}
+
+// ---------- engines and memory bar ----------
+function renderTop() {
+  const box = $("#engineBtns");
+  box.innerHTML = ALL.filter(id => ENGINES[id].installed).map(id => {
+    const e = ENGINES[id], f = fit(id), s = f.ok ? state.engineState[id] : "nofit";
+    const label = { cold: "cold", warm: "warm", loading: "loading", unloading: "unloading", generating: "generating", nofit: "won't fit" }[s];
+    const size = e.device === "cpu" ? "CPU" : `${e.gb.toFixed(1)} GB`;
+    return `<button class="engine" data-engine="${id}" data-fit="${f.ok ? "yes" : "no"}" aria-pressed="${id === state.engine}"><b>${e.name}</b><span>${size}</span><span class="state" data-s="${s}">${label}</span></button>`;
+  }).join("") + `<button class="engine more" id="moreEngines">Engines…</button>`;
+  $$(".engine[data-engine]").forEach(b => {
+    const id = b.dataset.engine;
+    b.onclick = () => selectEngine(id);
+    b.onmouseenter = b.onfocus = () => previewEngine(id);
+    b.onmouseleave = b.onblur = () => previewEngine(null);
+  });
+  $("#moreEngines").onclick = openEngines;
+
+  const h = hw(), res = state.resident && state.engineState[state.resident] !== "unloading" ? state.resident : null;
+  const resE = res && ENGINES[res];
+  let total, base, used, text;
+  if (h.vram) {
+    total = h.vram; base = h.os; used = base + (resE && resE.device === "gpu" ? resE.gb : 0);
+    text = `<b>${used.toFixed(1)}</b> of ${total.toFixed(1)} GB VRAM · ` + (resE ? (resE.device === "cpu" ? `${resE.name} on the CPU` : `${resE.name} loaded`) : "nothing loaded");
+  } else {
+    total = h.ram; base = h.osRam; used = base + (resE ? resE.gb : 0);
+    text = `<b>${used.toFixed(1)}</b> of ${total.toFixed(1)} GB RAM · no GPU · ` + (resE ? `${resE.name} loaded` : "nothing loaded");
+  }
+  $(".bar .os").style.transform = `scaleX(${base / total})`;
+  $(".bar .fill").style.transform = `scaleX(${Math.min(1, used / total)})`;
+  $("#vramText").innerHTML = text;
+}
+function previewEngine(id) {
+  const ghost = $(".bar .ghost"), hint = $("#hint");
+  if (!id) { ghost.classList.remove("on"); hint.textContent = ""; hint.classList.remove("alert"); return; }
+  const e = ENGINES[id], h = hw(), f = fit(id);
+  const onBar = h.vram ? (e.device === "gpu" ? h.os + e.gb : 0) / h.vram : (h.osRam + e.gb) / h.ram;
+  ghost.style.width = `${Math.min(100, onBar * 100)}%`;
+  ghost.classList.toggle("on", onBar > 0);
+  hint.classList.remove("alert");
+  if (!f.ok) { hint.textContent = `${e.name} won't fit: it ${f.why}. Open Engines for ones that do.`; hint.classList.add("alert"); return; }
+  if (id === state.resident) { hint.textContent = `${e.name} is loaded.`; return; }
+  if (e.device === "cpu") { hint.textContent = `${e.name} runs on the CPU and uses about ${e.gb} GB of RAM. The GPU stays free.`; return; }
+  const other = state.resident && ENGINES[state.resident];
+  hint.textContent = other && other.device === "gpu"
+    ? `${e.name} needs ${e.gb.toFixed(1)} GB. ${other.name} will be unloaded first (${e.real}).`
+    : `${e.name} needs ${e.gb.toFixed(1)} GB (${e.real}).`;
+  hint.classList.toggle("alert", !!(other && other.device === "gpu"));
+}
+async function ensureEngine(id) {
+  if (state.resident === id && state.engineState[id] === "warm") return true;
+  if (state.resident && state.resident !== id) {
+    const old = state.resident;
+    state.engineState[old] = "unloading"; renderTop(); log(`Unloading ${ENGINES[old].name}…`);
+    await sleep(450);
+    state.engineState[old] = "cold"; state.resident = null; renderTop();
+  }
+  state.resident = id; state.engineState[id] = "loading"; renderTop();
+  const t0 = performance.now(); log(`Loading ${ENGINES[id].name}…`);
+  await sleep(ENGINES[id].load);
+  if (state.cancel) return false;
+  state.engineState[id] = "warm"; renderTop();
+  log(`${ENGINES[id].name} loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s (real: ${ENGINES[id].real}).`);
+  state.idleAt = Date.now() + idleMs();
+  return true;
+}
+function selectEngine(id) {
+  if (!fit(id).ok) { previewEngine(id); return; }
+  state.engine = id; renderTop(); renderComposer(); renderPreflight(); renderDialect(); renderDetail();
+}
+
+// ---------- profiles ----------
+function readiness(v, engine) {
+  const e = ENGINES[engine];
+  if (v.builtin) return v.builtin === engine ? { ok: true } : { ok: false, why: `${v.name} is a built-in ${ENGINES[v.builtin].name} voice` };
+  if (v.short) return { ok: false, why: `the clip is ${v.dur} s; it needs at least 3 s` };
+  if (e.transcript && v.tx === "transcribing") return { ok: false, why: `the transcript is still being written`, wait: true };
+  if (e.transcript && !v.transcript) return { ok: false, why: `${e.name} needs the transcript of the clip`, fix: "transcribe" };
+  return { ok: true };
+}
+function profileSummary(v) {
+  if (v.builtin) return { text: `Built-in, ${ENGINES[v.builtin].name} only`, cls: "" };
+  if (v.short) return { text: "Too short to clone", cls: "warn" };
+  if (v.tx === "transcribing") return { text: "Writing transcript…", cls: "busy" };
+  const usable = ALL.filter(e => ENGINES[e].installed && fit(e).ok);
+  const ok = usable.filter(e => readiness(v, e).ok);
+  if (ok.length === usable.length) return { text: `Ready · default ${ENGINES[v.defaults.engine].name}`, cls: "" };
+  return { text: `${ok.map(e => ENGINES[e].name).join(", ") || "No engine"} only · no transcript`, cls: "warn" };
+}
+function renderVoices() {
+  const list = $("#voiceList");
+  list.innerHTML = "";
+  $("#voiceCount").textContent = `${profiles.length} profiles`;
+  profiles.forEach(v => {
+    const s = profileSummary(v);
+    const b = document.createElement("button");
+    b.className = "voice"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", v.id === state.voice); b.dataset.id = v.id;
+    b.innerHTML = `<span class="voice-top"><span class="voice-name">${v.name}</span><span class="voice-dur">${v.dur ? v.dur.toFixed(1) + " s" : ""}</span></span>
+      ${v.builtin ? "" : "<canvas></canvas>"}
+      <span class="voice-ready ${s.cls}">${s.text}</span>`;
+    b.onclick = () => selectProfile(v.id);
+    list.append(b);
+    const c = b.querySelector("canvas"); if (c) requestAnimationFrame(() => drawWave(c, v.seed));
+  });
+  renderDetail();
+}
+function currentSettings() { return { engine: state.engine, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, seed: state.seed }; }
+function sameSettings(a, b) { return a.engine === b.engine && a.kittenStyle === b.kittenStyle && a.breezeMode === b.breezeMode && a.seed === b.seed; }
+function describe(d) {
+  const extra = d.engine === "kitten" ? ` · ${d.kittenStyle}` : d.engine === "breeze" ? ` · ${d.breezeMode}` : "";
+  return `${ENGINES[d.engine].name}${extra} · seed ${d.seed}`;
+}
+function selectProfile(id) {
+  state.voice = id;
+  const d = voiceById(id).defaults;
+  if (ENGINES[d.engine].installed && fit(d.engine).ok) Object.assign(state, d);
+  else Object.assign(state, { ...d, engine: state.engine });
+  renderTop(); renderVoices(); renderComposer(); renderDialect(); renderPreflight();
+}
+function renderDetail() {
+  const v = voiceById(state.voice), d = $("#voiceDetail");
+  const changed = !sameSettings(v.defaults, currentSettings());
+  const defaults = `<div class="defaults"><span>Defaults: <b>${describe(v.defaults)}</b></span>
+      <button class="btn small" id="saveDefaults" ${changed ? "" : "disabled"}>${changed ? "Save current" : "Saved"}</button></div>`;
+  if (v.builtin) {
+    d.innerHTML = `<input class="name" id="pname" value="${v.name}" aria-label="Profile name">
+      <p style="color:var(--ink-2)">Built-in KittenTTS 2 voice. No clip or transcript needed.</p>${defaults}`;
+  } else {
+    const status = v.tx === "transcribing" ? `<span class="busy">Writing it now, on this PC…</span>`
+      : v.tx === "auto" ? `<span class="ok">Written automatically</span>`
+      : v.tx === "edited" ? `<span class="ok">Edited by you</span>` : `<span class="no">Missing</span>`;
+    d.innerHTML = `<input class="name" id="pname" value="${v.name}" aria-label="Profile name">
+      <label for="tx"><span>Transcript</span>${status}</label>
+      <textarea class="transcript" id="tx" ${v.tx === "transcribing" ? "disabled" : ""} placeholder="What is said in the clip.">${v.transcript}</textarea>
+      ${defaults}`;
+    $("#tx").oninput = e => { v.transcript = e.target.value; v.tx = v.transcript ? "edited" : "none"; renderSummaries(); renderPreflight(); d.querySelector("label span:last-child").outerHTML = v.tx === "edited" ? `<span class="ok">Edited by you</span>` : `<span class="no">Missing</span>`; };
+  }
+  $("#pname").onchange = e => { v.name = e.target.value.trim() || v.name; renderVoices(); log(`Profile renamed to ${v.name}.`); };
+  $("#saveDefaults").onclick = () => { v.defaults = currentSettings(); renderDetail(); renderSummaries(); log(`Saved ${describe(v.defaults)} as ${v.name}'s defaults.`); };
+}
+function renderSummaries() {
+  $$(".voice").forEach(b => { const s = profileSummary(voiceById(b.dataset.id)); const el = b.querySelector(".voice-ready"); el.textContent = s.text; el.className = `voice-ready ${s.cls}`; });
+}
+// Speech-to-text runs locally as soon as a clip arrives; nobody presses a button.
+async function transcribe(v) {
+  v.tx = "transcribing"; v.transcript = "";
+  renderVoices(); renderPreflight();
+  log(`Writing the transcript for ${v.name} with Whisper on the CPU…`);
+  await sleep(2200);
+  v.transcript = "Sample text written by the local speech-to-text model. Fix any word it got wrong.";
+  v.tx = "auto";
+  renderVoices(); renderPreflight();
+  log(`Transcript for ${v.name} is ready. Breeze, Fish and the other transcript engines can use the clip now.`);
+}
+function addProfile(name, dur, transcript) {
+  const v = { id: "p" + Date.now(), name, dur, seed: Math.floor(Math.random() * 1e6), tx: transcript ? "auto" : "none", transcript: transcript || "",
+              defaults: { engine: state.engine, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, seed: state.seed } };
+  profiles.unshift(v); state.voice = v.id;
+  renderVoices(); renderPreflight();
+  $("#pname").select();
+  return v;
+}
+
+// ---------- script ----------
+function scriptText(engine) {
+  let out = "";
+  $("#script").childNodes.forEach(n => {
+    if (n.dataset && n.dataset.tag) out += ENGINES[engine].has.includes(n.dataset.tag) ? ENGINES[engine].tag(n.dataset.tag) : "";
+    else out += n.textContent;
+  });
+  return out.replace(/\s+/g, " ").trim();
+}
+function neutralText() {
+  let out = "";
+  $("#script").childNodes.forEach(n => (out += n.dataset && n.dataset.tag ? `[${n.dataset.tag}]` : n.textContent));
+  return out.replace(/\s+/g, " ").trim();
+}
+const scriptTags = () => $$("#script .tag").map(t => t.dataset.tag);
+// A sound the current engine can't make is shown struck through, right where it sits in the script.
+function renderDialect() {
+  const e = ENGINES[state.engine];
+  $$("#script .tag").forEach(t => {
+    const ok = e.has.includes(t.dataset.tag);
+    t.classList.toggle("skip", !ok);
+    t.title = ok ? `${e.name} reads this as ${e.tag(t.dataset.tag)}` : `${e.name} can't do "${t.dataset.tag}", so it's skipped. Other engines may.`;
+  });
+}
+function insertTag(tag) {
+  const span = document.createElement("span");
+  span.className = "tag"; span.contentEditable = "false"; span.dataset.tag = tag; span.textContent = tag;
+  const sel = getSelection(), el = $("#script"), r = lastCaret;
+  if (r && el.contains(r.startContainer)) {
+    r.deleteContents(); r.insertNode(document.createTextNode(" ")); r.insertNode(span);
+    r.setStartAfter(span); r.collapse(true); el.focus(); sel.removeAllRanges(); sel.addRange(r);
+  } else el.append(" ", span, " ");
+  renderDialect(); renderCount();
+}
+const renderCount = () => ($("#charCount").textContent = `${scriptText(state.engine).length} characters`);
+
+// ---------- composer: "Say it as [voice] with [engine] in [mode] mode" ----------
+const MODES = {
+  breeze: { key: "breezeMode", word: "mode", options: [
+    ["Clone", "Copies the voice from the profile's clip."],
+    ["Design", "Makes a new voice from a description. The clip isn't used."],
+    ["Direction", "The clip's voice, steered by a description."]] },
+  kitten: { key: "kittenStyle", word: "style", options: [
+    ["Plain", "Reads the text straight."],
+    ["Expressive", "Acts out sounds and emotion tags."]] },
+};
+function renderComposer() {
+  closeMenu();
+  const e = ENGINES[state.engine], v = voiceById(state.voice), m = MODES[state.engine];
+  const design = state.engine === "breeze" && state.breezeMode === "Design";
+  const tok = (menu, text) => `<button class="token" data-menu="${menu}" aria-expanded="false">${text}</button>`;
+  $("#recipe").innerHTML = (design ? "Say it as a new voice" : `Say it as ${tok("voice", v.name)}`)
+    + ` with ${tok("engine", e.name)}` + (m ? ` in ${tok("mode", state[m.key])} ${m.word}` : "");
+  const instr = $("#instr");
+  instr.hidden = !(state.engine === "breeze" && state.breezeMode !== "Clone");
+  instr.placeholder = design ? "Describe the new voice, e.g. warm, slow, a little husky" : "How should it sound? e.g. tired and quiet";
+}
+
+const SOUNDS = [
+  ["laugh", "A short laugh."],
+  ["sigh", "An audible sigh."],
+  ["pause", "A beat of silence."],
+  ["breath", "A breath in before the next words."],
+  ["excited", "Reads the next words with energy."],
+];
+let menuFor = null;
+function menuHtml(kind) {
+  const e = ENGINES[state.engine];
+  if (kind === "voice") return `<p class="menu-title">Voice profile</p>` + profiles.map(v =>
+    `<button class="mi" data-v="${v.id}" aria-checked="${v.id === state.voice}"><b>${v.name}<em>${v.dur ? v.dur.toFixed(1) + " s" : "built-in"}</em></b><span>${profileSummary(v).text}</span></button>`).join("");
+  if (kind === "engine") return `<p class="menu-title">Engine</p>` + ALL.filter(id => ENGINES[id].installed).map(id => {
+    const x = ENGINES[id], f = fit(id);
+    const st = !f.ok ? "won't fit" : id === state.resident ? "loaded" : "not loaded";
+    const need = x.device === "cpu" ? `CPU, ${x.gb} GB RAM` : `${x.gb.toFixed(1)} GB VRAM`;
+    return `<button class="mi" data-e="${id}" aria-checked="${id === state.engine}" ${f.ok ? "" : "disabled"}><b>${x.name}<em>${st}</em></b><span>${need} · ${x.transcript ? "clip + transcript" : "clip only"}</span></button>`;
+  }).join("") + `<div class="menu-sep"></div><button class="mi" data-engines><b>More engines…</b><span>Download smaller ones that fit other PCs</span></button>`;
+  if (kind === "mode") { const m = MODES[state.engine]; return `<p class="menu-title">${e.name} ${m.word}</p>` + m.options.map(([o, d]) =>
+    `<button class="mi" data-mode="${o}" aria-checked="${state[m.key] === o}"><b>${o}</b><span>${d}</span></button>`).join(""); }
+  if (kind === "sound") return `<p class="menu-title">Add at the cursor</p>` + SOUNDS.map(([s, d]) => {
+    const ok = e.has.includes(s);
+    return `<button class="mi" data-sound="${s}"><b>${s[0].toUpperCase() + s.slice(1)}<em>${ok ? e.tag(s) : `${e.name} skips it`}</em></b><span>${d}</span></button>`;
+  }).join("");
+  if (kind === "options") return `<div class="opt"><b>Seed</b><div class="row"><input class="num" id="seed" value="${state.seed}" inputmode="numeric"><button class="btn small" id="reseed">New seed</button></div>
+    <p>The same seed and text give the same take. A new seed gives a different reading of the same line.</p></div>`;
+}
+function openMenu(kind, trigger) {
+  if (menuFor === trigger) return closeMenu();
+  closeMenu();
+  const m = $("#menu");
+  m.innerHTML = menuHtml(kind);
+  m.classList.add("open");
+  menuFor = trigger; trigger.setAttribute("aria-expanded", "true");
+  const r = trigger.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+  const want = kind === "sound" ? r.right - mw : r.left; // the sound menu hangs from its right edge, inside the script
+  const left = Math.max(12, Math.min(want, innerWidth - mw - 12));
+  const above = r.top - mh - 8 > 8;
+  m.style.left = `${left}px`;
+  m.style.top = `${above ? r.top - mh - 8 : r.bottom + 8}px`;
+  m.style.setProperty("--origin", `${r.left - left + r.width / 2}px ${above ? "100%" : "0"}`);
+  if (kind === "options") {
+    $("#seed").oninput = ev => { state.seed = +ev.target.value || 0; renderDetail(); };
+    $("#reseed").onclick = () => { state.seed = Math.floor(Math.random() * 9999); $("#seed").value = state.seed; renderDetail(); };
+    $("#seed").focus();
+  }
+}
+function closeMenu() {
+  if (!menuFor) return;
+  menuFor.setAttribute("aria-expanded", "false"); menuFor = null;
+  $("#menu").classList.remove("open");
+}
+$("#menu").onclick = ev => {
+  const b = ev.target.closest(".mi"); if (!b || b.disabled) return;
+  if (b.dataset.v) { closeMenu(); selectProfile(b.dataset.v); }
+  else if (b.dataset.e) { closeMenu(); selectEngine(b.dataset.e); }
+  else if (b.dataset.mode) { state[MODES[state.engine].key] = b.dataset.mode; renderComposer(); renderPreflight(); renderDetail(); }
+  else if ("engines" in b.dataset) { closeMenu(); openEngines(); }
+  else if (b.dataset.sound) { closeMenu(); insertTag(b.dataset.sound); }
+};
+document.addEventListener("click", ev => {
+  const t = ev.target.closest("[data-menu]");
+  if (t) return openMenu(t.dataset.menu, t);
+  if (menuFor && !ev.target.closest("#menu")) closeMenu();
+});
+
+// ---------- preflight ----------
+function blocker(engine) {
+  const v = voiceById(state.voice);
+  if (!ENGINES[engine].installed) return { why: `${ENGINES[engine].name} isn't downloaded yet.`, fix: "install" };
+  if (!fit(engine).ok) return { why: `${ENGINES[engine].name} won't fit on this PC: it ${fit(engine).why}.` };
+  if (!scriptText(engine)) return { why: "The script is empty." };
+  if (state.busy) return { why: "Wait for the current take to finish, or press Esc to cancel." };
+  if (engine === "breeze" && state.breezeMode !== "Clone" && !$("#instr").value.trim()) return { why: "Describe the voice first." };
+  if (engine === "breeze" && state.breezeMode === "Design") return null;
+  const r = readiness(v, engine);
+  return r.ok ? null : { why: r.wait ? `Waiting for ${v.name}'s transcript. It takes a few seconds.` : `Can't clone ${v.name} with ${ENGINES[engine].name}: ${r.why}.`, fix: r.fix, wait: r.wait };
+}
+const compareSet = () => ALL.filter(id => !blocker(id));
+function renderPreflight() {
+  const e = ENGINES[state.engine], v = voiceById(state.voice), b = blocker(state.engine), p = $("#preflight");
+  $("#genBtn").disabled = !!b;
+  const n = compareSet().length;
+  $("#compareBtn").disabled = state.busy || n < 2;
+  $("#compareBtn").textContent = n >= 2 ? `Compare ${n} engines` : "Compare engines";
+  $("#compareBtn").title = n >= 2 ? `Makes one take with each of: ${compareSet().map(id => ENGINES[id].name).join(", ")}` : "Needs two engines that can use this voice";
+  p.className = "preflight" + (b ? (b.wait ? " wait" : " block") : "");
+  if (b) {
+    p.innerHTML = b.why + (b.fix === "transcribe" ? ` <button id="pfFix">Write it now</button>` : b.fix === "install" ? ` <button id="pfFix">Download it (${ENGINES[state.engine].size})</button>` : "");
+    const fix = $("#pfFix"); if (fix) fix.onclick = () => (b.fix === "transcribe" ? transcribe(v) : openEngines());
+    return;
+  }
+  const how = state.engine === "breeze" && state.breezeMode === "Design" ? "New voice from your description"
+    : v.builtin ? "Built-in voice" : `${v.dur.toFixed(1)} s clip${e.transcript ? " + transcript" : ""}`;
+  const load = state.resident === state.engine && state.engineState[state.engine] === "warm" ? "loaded, starts now" : `loads first (${e.real.replace(/ to load$/, "")})`;
+  p.textContent = `${how} · ${load}`;
+}
+
+// ---------- takes ----------
+const takeLabel = t => (state.blind && t.group ? `Take ${String.fromCharCode(65 + t.groupIndex)}` : `Take ${t.n}`);
+const ICON = {
+  play: `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.8v10.4a.6.6 0 0 0 .9.5l8.2-5.2a.6.6 0 0 0 0-1L5.4 2.3a.6.6 0 0 0-.9.5z" fill="currentColor"/></svg>`,
+  pause: `<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3" height="11" rx="1" fill="currentColor"/></svg>`,
+  redo: `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8"/><path d="M13 2.2v3.4H9.6"/></svg>`,
+};
+function fileName(t) {
+  const v = voiceById(t.voice).name, ext = prefs.format.toLowerCase();
+  const base = prefs.names === "Take 4" ? `Take ${t.n}` : prefs.names.startsWith("2026") ? `${new Date().toISOString().slice(0, 10)} ${v} take ${t.n}` : `${v} - ${ENGINES[t.engine].name} - take ${t.n}`;
+  return `${base}.${ext}`;
+}
+function renderTakes(revealId) {
+  const list = $("#takeList");
+  list.innerHTML = "";
+  const unsaved = takes.filter(t => !t.pending && !t.saved).length;
+  $("#unsaved").textContent = unsaved ? `${unsaved} unsaved` : "";
+  if (!takes.length) { list.innerHTML = `<p class="empty">No takes yet. Write a script, pick a voice and press Ctrl Enter.</p>`; return; }
+  let lastGroup = null;
+  [...takes].reverse().forEach(t => {
+    if (t.group && t.group !== lastGroup) {
+      const g = document.createElement("div"); g.className = "group";
+      g.textContent = `Comparison ${t.group}${state.blind ? " · engines hidden until you save one" : ""}`;
+      list.append(g);
+    }
+    lastGroup = t.group || null;
+    const v = voiceById(t.voice);
+    const el = document.createElement("div");
+    el.className = "take"; el.setAttribute("role", "option"); el.tabIndex = -1;
+    el.dataset.id = t.id; el.setAttribute("aria-selected", t.id === state.take);
+    const hide = state.blind && t.group && !t.saved;
+    const who = `<span class="who">· ${hide ? "hidden" : ENGINES[t.engine].name} · ${v.name}</span>`;
+    if (t.pending) {
+      el.innerHTML = `<div class="take-top"><span class="take-name">${takeLabel(t)} ${who}</span><span class="take-dur" data-elapsed></span></div>
+        <div class="progress"><span></span></div><span class="take-status" data-status>${t.status || "Queued"}</span>`;
+    } else {
+      el.innerHTML = `<div class="take-top"><span class="take-name">${takeLabel(t)} ${who}${t.saved ? `<span class="badge saved">Saved</span>` : ""}</span>
+          <span class="take-dur">${t.dur.toFixed(1)} s${hide ? "" : ` · made in ${t.made.toFixed(1)} s`}</span></div>
+        <canvas class="${t.id === revealId ? "reveal" : ""}"></canvas>
+        <p class="take-text">${escapeHtml(hide ? t.shown : t.text)}</p>
+        ${t.saved ? `<p class="take-path">${escapeHtml(t.saved)}</p>` : ""}
+        <div class="take-actions">
+          <button class="btn icon" data-act="play" title="${state.playing === t.id ? "Pause" : "Play"} (Space)" aria-label="${state.playing === t.id ? "Pause" : "Play"}">${state.playing === t.id ? ICON.pause : ICON.play}</button>
+          <button class="btn small" data-act="save" title="Ctrl S" ${t.saved ? "disabled" : ""}>${t.saved ? "Saved" : "Save"}</button>
+          <button class="btn small" data-act="saveas" title="Ctrl Shift S">Save as…</button>
+          <button class="btn icon" data-act="again" title="Redo with a new seed" aria-label="Redo with a new seed">${ICON.redo}</button>
+          <button class="btn small" data-act="delete">Delete</button>
+        </div>`;
+    }
+    el.onclick = e => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (act) return takeAction(t, act);
+      if (e.target.tagName === "CANVAS" && t.id === state.take) { const r = e.target.getBoundingClientRect(); seek(t, (e.clientX - r.left) / r.width); return; }
+      selectTake(t.id);
+    };
+    list.append(el);
+    const c = el.querySelector("canvas"); if (c) requestAnimationFrame(() => drawWave(c, t.seed, playedFraction(t)));
+  });
+}
+const escapeHtml = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const visibleTakes = () => [...takes].reverse().filter(t => !t.pending);
+function selectTake(id) {
+  if (state.playing && state.playing !== id) stop();
+  state.take = id; renderTakes();
+  document.querySelector(`.take[data-id="${id}"]`)?.scrollIntoView({ block: "nearest" });
+}
+function saveTake(t, as) {
+  if (!t || t.pending) return;
+  if (as) { log(`Save as opens the Windows save dialog (mockup: saved to Desktop).`); t.saved = `Desktop\\${fileName(t)}`; }
+  else { if (t.saved) return; t.saved = `${prefs.saveDir}\\${fileName(t)}`; }
+  if (state.blind && t.group) log(`Saved ${takeLabel(t)}. It was ${ENGINES[t.engine].name}. ${t.saved}`);
+  else if (!as) log(`Saved to ${t.saved}`);
+  renderTakes();
+}
+function takeAction(t, act) {
+  if (act === "play") return togglePlay(t);
+  if (act === "save") return saveTake(t, false);
+  if (act === "saveas") return saveTake(t, true);
+  if (act === "again") { state.seed = Math.floor(Math.random() * 9999); return generate(t.engine, { text: t.text, shown: t.shown || t.text }); }
+  if (act === "delete") { stop(); takes = takes.filter(x => x !== t); state.take = visibleTakes()[0]?.id; renderTakes(); log(t.saved ? `Removed Take ${t.n} from the list. The saved file stays.` : `Deleted Take ${t.n}.`); }
+}
+
+// ---------- playback (silent; shows the playhead) ----------
+function playedFraction(t) { return state.playing !== t.id ? t.pos || 0 : Math.min(1, state.playFrom + (performance.now() - state.playStart) / 1000 / t.dur); }
+function togglePlay(t) { state.playing === t.id ? stop(true) : play(t); }
+function play(t, from) { stop(); state.playing = t.id; state.playFrom = from ?? (t.pos >= 1 ? 0 : t.pos || 0); state.playStart = performance.now(); renderTakes(); tick(); }
+function seek(t, f) { t.pos = f; state.playing === t.id ? play(t, f) : renderTakes(); }
+function stop(keepPos) {
+  if (!state.playing) return;
+  const t = takes.find(x => x.id === state.playing);
+  if (t) t.pos = keepPos ? playedFraction(t) : 0;
+  state.playing = null; renderTakes();
+}
+function tick() {
+  if (!state.playing) return;
+  const t = takes.find(x => x.id === state.playing), f = playedFraction(t);
+  const c = document.querySelector(`.take[data-id="${t.id}"] canvas`); if (c) drawWave(c, t.seed, f);
+  if (f >= 1) { t.pos = 0; state.playing = null; renderTakes(); return; }
+  requestAnimationFrame(tick);
+}
+
+// ---------- generation ----------
+async function generate(engine, opts = {}) {
+  if (blocker(engine) && !opts.text) return;
+  state.busy = true; state.cancel = false; renderPreflight();
+  const t = { id: Date.now() + Math.random(), n: state.nextN++, engine, voice: state.voice, pending: true, seed: Math.floor(Math.random() * 1e6), saved: null,
+              text: opts.text || scriptText(engine), shown: opts.shown || neutralText(), group: opts.group, groupIndex: opts.groupIndex };
+  takes.push(t); state.take = t.id; renderTakes();
+  const t0 = performance.now();
+  const timer = setInterval(() => { const el = document.querySelector(`.take[data-id="${t.id}"] [data-elapsed]`); if (el) el.textContent = `${((performance.now() - t0) / 1000).toFixed(1)} s`; }, 100);
+  const status = s => { t.status = s; const el = document.querySelector(`.take[data-id="${t.id}"] [data-status]`); if (el) el.textContent = s; };
+  try {
+    if (!(state.resident === engine && state.engineState[engine] === "warm")) status(`Loading ${ENGINES[engine].name}`);
+    if (!(await ensureEngine(engine))) throw new Error("cancel");
+    state.engineState[engine] = "generating"; renderTop(); status("Generating"); log(`${ENGINES[engine].name} is generating…`);
+    const g0 = performance.now(), dur = ENGINES[engine].gen;
+    while (performance.now() - g0 < dur) {
+      if (state.cancel) throw new Error("cancel");
+      const f = (performance.now() - g0) / dur;
+      const b = document.querySelector(`.take[data-id="${t.id}"] .progress span`); if (b) b.style.transform = `scaleX(${f})`;
+      status(`Generating · ${Math.round(f * 100)}%`);
+      await sleep(50);
+    }
+    Object.assign(t, { pending: false, dur: 3 + Math.random() * 3, made: (performance.now() - t0) / 1000 });
+    state.engineState[engine] = "warm"; state.idleAt = Date.now() + idleMs(); renderTop();
+    log(`${takeLabel(t)} is ready. Press Ctrl S to keep it.`);
+    renderTakes(t.id);
+    if (prefs.autoplay) play(t);
+  } catch (err) {
+    state.engineState[engine] = state.resident === engine ? "warm" : "cold"; renderTop();
+    takes = takes.filter(x => x !== t); state.take = visibleTakes()[0]?.id;
+    log("Cancelled."); renderTakes();
+  } finally { clearInterval(timer); state.busy = false; renderPreflight(); }
+}
+async function compareAll() {
+  const ids = compareSet();
+  if (ids.length < 2) return;
+  const group = state.compareN++;
+  ids.sort((a, b) => (b === state.resident) - (a === state.resident)); // start with what's loaded
+  const letters = ids.map((_, i) => i).sort(() => Math.random() - 0.5); // shuffled so order doesn't give it away
+  for (let i = 0; i < ids.length; i++) {
+    if (state.cancel) break;
+    await generate(ids[i], { text: scriptText(ids[i]), group, groupIndex: letters[i] });
+  }
+}
+
+// ---------- recorder (simulated) ----------
+let recTimer = null;
+function openRecorder() { $("#recorder").classList.add("open"); $("#recToggle").focus(); }
+function closeRecorder() { clearInterval(recTimer); recTimer = null; $("#recorder").classList.remove("open"); $("#recToggle").textContent = "Start recording"; $("#recTime").textContent = "0.0 s of 8 to 20 s"; $("#level").style.transform = "scaleX(0)"; }
+function toggleRecord() {
+  if (!recTimer) {
+    const t0 = performance.now();
+    $("#recToggle").textContent = "Stop";
+    recTimer = setInterval(() => { $("#recTime").textContent = `${((performance.now() - t0) / 1000).toFixed(1)} s of 8 to 20 s`; $("#level").style.transform = `scaleX(${0.15 + Math.random() * 0.75})`; }, 90);
+    return;
+  }
+  const secs = parseFloat($("#recTime").textContent);
+  closeRecorder();
+  const v = addProfile("New voice", Math.max(secs, 11.2), $(".rec p.read").textContent);
+  log(`Saved the profile "${v.name}". The transcript came from the passage you read. Rename it on the left.`);
+}
+function importClip() {
+  const v = addProfile("Imported clip", 12.6, "");
+  log(`Imported and converted to mono 24 kHz (mockup). Writing the transcript…`);
+  transcribe(v);
+}
+
+// ---------- engines dialog ----------
+function openEngines() { renderEngines(); $("#enginesDlg").classList.add("open"); }
+function closeEngines() { $("#enginesDlg").classList.remove("open"); }
+function renderEngines() {
+  const h = hw(), rec = recommended();
+  $$("#hwSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.hw === state.hw));
+  $("#machine").innerHTML = `This PC: <b>${h.label}</b>. Mimic checks this when it starts and only offers engines that fit.`;
+  $("#engList").innerHTML = ALL.map(id => {
+    const e = ENGINES[id], f = fit(id);
+    const need = e.device === "cpu" ? `CPU · ${e.gb} GB RAM` : `GPU · ${e.gb.toFixed(1)} GB VRAM`;
+    const clone = e.transcript ? "Clones from clip + transcript" : "Clones from clip only";
+    const fitText = !f.ok ? `Won't fit: ${f.why}` : id === rec ? "Fits · best for this PC" : "Fits";
+    const action = e.installed ? `<button class="btn small" data-uninstall="${id}">Remove</button>` : `<button class="btn small" data-install="${id}" ${f.ok ? "" : "disabled"}>Download ${e.size}</button>`;
+    return `<div class="eng-row">
+      <div><div class="n">${e.full}</div><div class="sub">${e.license} license${e.installed ? " · installed" : ""}</div></div>
+      <div><div>${need}</div><div class="sub">${clone}</div></div>
+      <div class="fit ${!f.ok ? "no" : id === rec ? "rec" : "yes"}">${fitText}</div>
+      <div>${action}</div></div>`;
+  }).join("");
+  const stt = h.ram >= 16 ? "Whisper small.en on the CPU, about 0.5 GB of RAM" : "Whisper base.en on the CPU, about 0.2 GB of RAM (smaller model for this PC)";
+  $("#sttLine").textContent = `Transcripts are written for you by local speech-to-text: ${stt}. It never touches the GPU.`;
+  $$("[data-install]").forEach(b => b.onclick = async () => {
+    const id = b.dataset.install; b.disabled = true;
+    for (let p = 0; p <= 100; p += 20) { b.textContent = `Downloading ${p}%`; await sleep(180); }
+    ENGINES[id].installed = true; renderEngines(); renderTop(); renderPreflight(); log(`${ENGINES[id].full} installed.`);
+  });
+  $$("[data-uninstall]").forEach(b => b.onclick = () => log(`Removing an engine deletes its model files (mockup: not done).`));
+}
+function setHardware(key) {
+  state.hw = key;
+  if (state.resident && !fit(state.resident).ok) { state.engineState[state.resident] = "cold"; state.resident = null; }
+  if (!fit(state.engine).ok || !ENGINES[state.engine].installed) {
+    const usable = ALL.find(id => ENGINES[id].installed && fit(id).ok);
+    state.engine = usable || recommended();
+  }
+  renderEngines(); renderTop(); renderVoices(); renderComposer(); renderDialect(); renderPreflight();
+}
+
+// ---------- command palette ----------
+const COMMANDS = () => [
+  { label: "Generate", key: "Ctrl Enter", run: () => generate(state.engine) },
+  { label: "Save take", key: "Ctrl S", run: () => saveTake(takes.find(x => x.id === state.take), false) },
+  { label: "Save take as…", key: "Ctrl Shift S", run: () => saveTake(takes.find(x => x.id === state.take), true) },
+  { label: "Compare engines", key: "", run: compareAll },
+  ...ALL.filter(id => ENGINES[id].installed && fit(id).ok).map(id => ({ label: `Switch to ${ENGINES[id].name}`, key: "", run: () => selectEngine(id) })),
+  { label: "Engines and downloads", key: "", run: openEngines },
+  { label: "Unload engine (free memory)", key: "", run: unload },
+  { label: "Record a voice", key: "", run: openRecorder },
+  { label: "Import a clip", key: "", run: importClip },
+  { label: state.blind ? "Show engine names" : "Blind comparison", key: "B", run: toggleBlind },
+  { label: "Switch theme", key: "", run: toggleTheme },
+  { label: "Settings", key: "Ctrl ,", run: openSettings },
+];
+let palIndex = 0;
+function openPalette() { $("#palette").classList.add("open"); $("#paletteInput").value = ""; palIndex = 0; renderPalette(); $("#paletteInput").focus(); }
+const closePalette = () => $("#palette").classList.remove("open");
+const paletteItems = () => { const q = $("#paletteInput").value.toLowerCase(); return COMMANDS().filter(c => c.label.toLowerCase().includes(q)); };
+function renderPalette() {
+  const items = paletteItems(); palIndex = Math.min(palIndex, Math.max(0, items.length - 1));
+  $("#paletteList").innerHTML = items.map((c, i) => `<li aria-selected="${i === palIndex}" data-i="${i}"><span>${c.label}</span><span>${c.key}</span></li>`).join("") || `<li><span>No command matches.</span></li>`;
+}
+function runPalette(i) { const c = paletteItems()[i]; closePalette(); c && c.run(); }
+
+// ---------- misc ----------
+async function unload() {
+  if (!state.resident) return log("Nothing is loaded.");
+  const id = state.resident; state.engineState[id] = "unloading"; renderTop(); await sleep(400);
+  state.engineState[id] = "cold"; state.resident = null; renderTop(); renderPreflight(); log(`${ENGINES[id].name} unloaded. Memory is free.`);
+}
+function toggleBlind() { state.blind = !state.blind; $("#blindBtn").setAttribute("aria-pressed", state.blind); $("#blindBtn").firstChild.textContent = state.blind ? "Blind on " : "Blind "; renderTakes(); }
+// ---------- settings ----------
+const prefs = {
+  theme: "Dark", scriptSize: "Medium",
+  saveDir: "Documents\\Mimic", names: "Mason - Breeze - take 4", format: "WAV", warnUnsaved: true,
+  output: "Windows default", autoplay: false,
+  idle: "10 minutes", preload: true, enginesDir: "C:\\Users\\mason\\tts",
+  mic: "Windows default", stt: "Automatic (small.en)", lang: "English",
+};
+const idleMs = () => ({ "5 minutes": 5, "10 minutes": 10, "30 minutes": 30 }[prefs.idle] ?? Infinity) * 60e3;
+function applyTheme() {
+  const dark = prefs.theme === "Dark" || (prefs.theme === "System" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.documentElement.dataset.theme = dark ? "dark" : "light";
+  document.documentElement.style.setProperty("--script-size", { Small: "28px", Medium: "34px", Large: "42px" }[prefs.scriptSize]);
+  renderVoices(); renderTakes();
+}
+function toggleTheme() { prefs.theme = document.documentElement.dataset.theme === "light" ? "Dark" : "Light"; applyTheme(); renderSettings(); }
+
+const SET = {
+  seg: (key, opts) => `<div class="seg" data-pref="${key}">${opts.map(o => `<button aria-pressed="${prefs[key] === o}">${o}</button>`).join("")}</div>`,
+  sel: (key, opts) => `<select class="sel" data-pref="${key}">${opts.map(o => `<option ${prefs[key] === o ? "selected" : ""}>${o}</option>`).join("")}</select>`,
+  sw: key => `<button class="switch" role="switch" data-pref="${key}" aria-checked="${prefs[key]}"></button>`,
+  path: key => `<span class="path">${prefs[key]}</span><button class="btn small" data-change="${key}">Change…</button>`,
+};
+const row = (t, d, control) => `<div class="set-row"><div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ""}</div><div class="row">${control}</div></div>`;
+const section = (title, body) => `<section class="set-section"><h4>${title}</h4><div class="set-group">${body}</div></section>`;
+function renderSettings() {
+  const sample = { "Mason - Breeze - take 4": "Mason - Breeze - take 4", "2026-10-15 Mason take 4": "2026-10-15 Mason take 4", "Take 4": "Take 4" };
+  $("#settingsBody").innerHTML =
+    section("Appearance",
+      row("Theme", "Dark, light, or follow Windows.", SET.seg("theme", ["Dark", "Light", "System"])) +
+      row("Script text size", "How big the words you're writing look.", SET.seg("scriptSize", ["Small", "Medium", "Large"]))) +
+    section("Commands",
+      row("Command palette", "Every action in one searchable list.", `<button class="btn small" data-open="palette">Open <kbd>Ctrl K</kbd></button>`) +
+      `<div class="keys"><span>Generate</span><kbd>Ctrl Enter</kbd><span>Play or pause the selected take</span><kbd>Space</kbd>
+        <span>Save take / Save as</span><kbd>Ctrl S · Ctrl Shift S</kbd><span>Jump to a take</span><kbd>1-9 · J · K</kbd>
+        <span>Blind comparison</span><kbd>B</kbd><span>Stop playback or cancel a take</span><kbd>Esc</kbd><span>Settings</span><kbd>Ctrl ,</kbd></div>`) +
+    section("Saving takes",
+      row("Save folder", "Where Save puts takes. Save as… asks every time.", SET.path("saveDir")) +
+      row("File names", "", SET.sel("names", Object.keys(sample))) +
+      row("Format", "WAV keeps full quality. MP3 is smaller.", SET.seg("format", ["WAV", "FLAC", "MP3"])) +
+      row("Warn about unsaved takes when closing", "", SET.sw("warnUnsaved"))) +
+    section("Playback",
+      row("Output device", "", SET.sel("output", ["Windows default", "Speakers", "Headphones"])) +
+      row("Play each take when it's ready", "", SET.sw("autoplay"))) +
+    section("Engines and memory",
+      row("Unload the engine when idle for", "Frees the GPU for games and other apps.", SET.sel("idle", ["5 minutes", "10 minutes", "30 minutes", "Never"])) +
+      row("Load the default engine when Mimic starts", "The first take comes faster, but memory is used right away.", SET.sw("preload")) +
+      row("Engines folder", "Model files and their Python environments.", SET.path("enginesDir")) +
+      row("Engines and downloads", "", `<button class="btn small" data-open="engines">Open</button>`)) +
+    section("Recording and transcripts",
+      row("Microphone", "", SET.sel("mic", ["Windows default", "Headset microphone", "USB microphone"])) +
+      row("Speech-to-text model", "Bigger is more accurate, smaller is faster. Runs on the CPU.", SET.sel("stt", ["Automatic (small.en)", "tiny.en", "base.en", "small.en", "medium.en"])) +
+      row("Transcript language", "", SET.sel("lang", ["English", "Detect automatically"])));
+}
+function openSettings() { renderSettings(); $("#settingsDlg").classList.add("open"); }
+function closeSettings() { $("#settingsDlg").classList.remove("open"); }
+$("#settingsBody").addEventListener("click", e => {
+  const segBtn = e.target.closest(".seg[data-pref] button");
+  if (segBtn) { prefs[segBtn.parentElement.dataset.pref] = segBtn.textContent; afterPref(segBtn.parentElement.dataset.pref); return; }
+  const sw = e.target.closest(".switch"); if (sw) { prefs[sw.dataset.pref] = !prefs[sw.dataset.pref]; afterPref(sw.dataset.pref); return; }
+  const ch = e.target.closest("[data-change]"); if (ch) { log("Change… opens the Windows folder picker (mockup)."); return; }
+  const op = e.target.closest("[data-open]"); if (op) { closeSettings(); op.dataset.open === "palette" ? openPalette() : openEngines(); }
+});
+$("#settingsBody").addEventListener("change", e => { const s = e.target.closest("select[data-pref]"); if (s) { prefs[s.dataset.pref] = s.value; afterPref(s.dataset.pref); } });
+function afterPref(key) {
+  if (key === "theme" || key === "scriptSize") applyTheme();
+  if (key === "idle") state.idleAt = Date.now() + idleMs();
+  renderSettings();
+}
+
+function idleTick() {
+  const el = $("#idle");
+  if (!state.resident || state.engineState[state.resident] !== "warm" || idleMs() === Infinity) { el.textContent = ""; return; }
+  const s = Math.max(0, Math.round((state.idleAt - Date.now()) / 1000));
+  el.textContent = `${ENGINES[state.resident].name} unloads after ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} idle ·`;
+}
+
+// ---------- wiring ----------
+// Remember where the caret was in the script, so "Add sound" inserts there after the menu takes focus.
+let lastCaret = null;
+document.addEventListener("selectionchange", () => {
+  const s = getSelection();
+  if (s.rangeCount && $("#script").contains(s.anchorNode)) lastCaret = s.getRangeAt(0).cloneRange();
+});
+$("#instr").oninput = renderPreflight;
+$("#script").addEventListener("input", () => { renderDialect(); renderCount(); renderPreflight(); });
+$("#genBtn").onclick = () => generate(state.engine);
+$("#compareBtn").onclick = compareAll;
+$("#blindBtn").onclick = toggleBlind;
+$("#settingsBtn").onclick = openSettings;
+$("#settingsClose").onclick = closeSettings;
+$("#recordBtn").onclick = openRecorder;
+$("#importBtn").onclick = importClip;
+$("#recToggle").onclick = toggleRecord;
+$("#recCancel").onclick = closeRecorder;
+$("#hwSeg").onclick = e => { const b = e.target.closest("[data-hw]"); if (b) setHardware(b.dataset.hw); };
+$("#paletteInput").oninput = () => { palIndex = 0; renderPalette(); };
+$("#paletteList").onclick = e => { const li = e.target.closest("li[data-i]"); if (li) runPalette(+li.dataset.i); };
+for (const [id, close] of [["palette", closePalette], ["recorder", closeRecorder], ["enginesDlg", closeEngines], ["settingsDlg", closeSettings]])
+  $("#" + id).onclick = e => { if (e.target.id === id) close(); };
+
+document.addEventListener("keydown", e => {
+  const typing = e.target.isContentEditable || /INPUT|TEXTAREA/.test(e.target.tagName);
+  const key = e.key.toLowerCase();
+  if (menuFor && e.key === "Escape") { const t = menuFor; closeMenu(); t.focus(); return; }
+  if (e.ctrlKey && key === "k") { e.preventDefault(); $("#palette").classList.contains("open") ? closePalette() : openPalette(); return; }
+  if ($("#palette").classList.contains("open")) {
+    const n = paletteItems().length;
+    if (e.key === "Escape") closePalette();
+    else if (e.key === "ArrowDown") { palIndex = (palIndex + 1) % n; renderPalette(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { palIndex = (palIndex - 1 + n) % n; renderPalette(); e.preventDefault(); }
+    else if (e.key === "Enter") runPalette(palIndex);
+    return;
+  }
+  if ($("#recorder").classList.contains("open")) { if (e.key === "Escape") closeRecorder(); return; }
+  if ($("#enginesDlg").classList.contains("open")) { if (e.key === "Escape") closeEngines(); return; }
+  if (e.ctrlKey && e.key === ",") { e.preventDefault(); openSettings(); return; }
+  if ($("#settingsDlg").classList.contains("open")) { if (e.key === "Escape") closeSettings(); return; }
+  if (e.ctrlKey && key === "s") { e.preventDefault(); saveTake(takes.find(x => x.id === state.take), e.shiftKey); return; }
+  if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); generate(state.engine); return; }
+  if (e.key === "Escape") { if (state.busy) state.cancel = true; else stop(); if (typing) e.target.blur(); return; }
+  if (typing) return;
+  const vis = visibleTakes(), i = vis.findIndex(t => t.id === state.take);
+  if (e.key === " ") { e.preventDefault(); const t = takes.find(x => x.id === state.take); if (t && !t.pending) togglePlay(t); }
+  else if (/^[1-9]$/.test(e.key) && vis[+e.key - 1]) selectTake(vis[+e.key - 1].id);
+  else if (key === "j" && vis[i + 1]) selectTake(vis[i + 1].id);
+  else if (key === "k" && i > 0) selectTake(vis[i - 1].id);
+  else if (key === "b") toggleBlind();
+});
+addEventListener("resize", () => { renderVoices(); renderTakes(); });
+
+// Deep links for screenshots: #light #narrator #fish #record #palette #engines #compare #blind #hw-small #hw-cpu
+const flags = location.hash.slice(1).split(",");
+if (flags.includes("light")) prefs.theme = "Light";
+applyTheme();
+if (flags.includes("settings")) openSettings();
+renderTop(); renderVoices(); renderComposer(); renderDialect(); renderCount(); renderPreflight(); renderTakes();
+if (flags.includes("hw-small")) setHardware("small");
+if (flags.includes("hw-cpu")) setHardware("cpu");
+// The Narrator clip was "just imported": its transcript is written automatically.
+transcribe(voiceById("narrator"));
+if (flags.includes("narrator")) selectProfile("narrator");
+if (flags.includes("fish")) previewEngine("fish");
+if (flags.includes("record")) openRecorder();
+if (flags.includes("palette")) openPalette();
+if (flags.includes("engines")) openEngines();
+if (flags.includes("menu-engine")) $('[data-menu="engine"]').click();
+if (flags.includes("menu-sound")) $('[data-menu="sound"]').click();
+if (flags.includes("menu-mode")) $('[data-menu="mode"]').click();
+if (flags.includes("kitten")) selectEngine("kitten");
+if (flags.includes("design")) { state.breezeMode = "Design"; renderComposer(); renderPreflight(); }
+if (flags.includes("compare")) { if (flags.includes("blind")) toggleBlind(); compareAll(); }
+document.fonts?.ready.then(() => { renderVoices(); renderTakes(); });
+setInterval(idleTick, 1000); idleTick();
+</script>
+</body>
+</html>

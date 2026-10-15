@@ -22,9 +22,15 @@ for attempt in 1 2 3 4; do
 done
 uv pip install fish-speech
 
+# Where the Fish S2 Pro weights are on the Windows side. Override with FISH_WEIGHTS=/mnt/c/... if you move them.
+FISH_WEIGHTS="${FISH_WEIGHTS:-/mnt/c/Users/mason/tts/ComfyUI/models/TTS/fish_audio_s2_pro}"
 if [ ! -f /root/fish/s2-pro/codec.pth ]; then
+  if [ ! -d "$FISH_WEIGHTS" ]; then
+    echo "Fish weights not found at $FISH_WEIGHTS. Set FISH_WEIGHTS to the folder holding codec.pth." >&2
+    exit 1
+  fi
   mkdir -p /root/fish/s2-pro
-  cp -r /mnt/c/Users/mason/tts/ComfyUI/models/TTS/fish_audio_s2_pro/. /root/fish/s2-pro/
+  cp -r "$FISH_WEIGHTS"/. /root/fish/s2-pro/
   rm -rf /root/fish/s2-pro/.cache
 fi
 

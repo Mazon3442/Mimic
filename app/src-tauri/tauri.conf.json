@@ -1,0 +1,46 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mimic",
+  "version": "0.1.0",
+  "identifier": "com.mazon.mimic",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Mimic",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 600,
+        "backgroundColor": "#111213",
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**", "$APPLOCALDATA/**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "category": "Music",
+    "shortDescription": "Local voice cloning",
+    "longDescription": "Write a script, pick a voice profile, and generate speech with KittenTTS, Qwen3-TTS, NeuTTS and more, on your own GPU or CPU.",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "linux": {
+      "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "ffmpeg"] },
+      "rpm": { "depends": ["webkit2gtk4.1", "gtk3", "ffmpeg"] }
+    },
+    "resources": {
+      "../../engines/": "engines/",
+      "../../scripts/": "scripts/"
+    }
+  }
+}

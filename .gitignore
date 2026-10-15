@@ -27,8 +27,10 @@ logs/
 *.aac
 *.reference.txt
 
-# ComfyUI
-ComfyUI/
+# Rust / Tauri build output
+target/
+app/src-tauri/gen/
+node_modules/
 
 # Local config / OS
 .env

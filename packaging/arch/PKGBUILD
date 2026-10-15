@@ -1,0 +1,38 @@
+# Builds Mimic from a tagged release. Usage, in this folder:  makepkg -si
+# Bump pkgver to the tag you want (without the "v").
+pkgname=mimic
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Local voice cloning: KittenTTS, Qwen3-TTS, NeuTTS and more, on your GPU or CPU"
+arch=('x86_64')
+url="https://github.com/Mazon3442/Mimic"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'ffmpeg' 'uv' 'xdg-utils')
+makedepends=('rust' 'cargo' 'nodejs' 'npm' 'libarchive')
+optdepends=(
+  'pciutils: show the GPU model (used to decide GPU or CPU)'
+  'nvidia-utils: VRAM readout and CUDA on NVIDIA GPUs'
+  'cmake: build NeuTTS (the CPU engine) from inside Mimic'
+  'base-devel: build NeuTTS (the CPU engine) from inside Mimic'
+  'espeak-ng: phonemes for NeuTTS'
+  'xdg-user-dirs: save takes to your Music folder'
+)
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "Mimic-$pkgver/app/src-tauri"
+  export CARGO_TARGET_DIR=target
+  # The .deb bundle has the binary, the engine workers, the desktop entry and the icons laid out
+  # the way Mimic expects; package() unpacks it.
+  npx --yes @tauri-apps/cli@2 build --bundles deb --config "{\"version\":\"$pkgver\"}"
+}
+
+package() {
+  cd "Mimic-$pkgver/app/src-tauri/target/release/bundle/deb"
+  local deb
+  deb=$(ls ./*.deb | head -n1)
+  bsdtar -xOf "$deb" 'data.tar.*' | bsdtar -xf - -C "$pkgdir"
+  install -Dm644 "$srcdir/Mimic-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
