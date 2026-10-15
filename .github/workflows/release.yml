@@ -1,8 +1,9 @@
 # Push an annotated version tag to build Windows and Linux packages and publish one GitHub release.
 # The release notes are the tag's message, exactly as written:
-#   git tag -a v1.0.0 --cleanup=verbatim -F notes.md
+#   git tag -a v1.0.0 -F notes.md      (or lazygit: Commits panel, T, then a tag description)
 #   git push origin v1.0.0
-# --cleanup=verbatim keeps Markdown headings; without it git deletes every line starting with "#".
+# Git deletes lines starting with "#" from tag messages, which kills Markdown headings. This repo sets
+# `git config core.commentChar ";"` so headings survive; on a fresh clone run that once (or tag with --cleanup=verbatim).
 name: Release
 
 on:
