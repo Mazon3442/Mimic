@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Mimic">
+  <title>Mimic</title>
+  <style>
+    .b { transform-box: fill-box; transform-origin: 50% 100%; animation: level 3.6s cubic-bezier(.23,1,.32,1) infinite; }
+    .b0 { animation-delay: 0s; } .b1 { animation-delay: .12s; } .b2 { animation-delay: .24s; } .b3 { animation-delay: .36s; } .b4 { animation-delay: .48s; }
+    @keyframes level {
+      0%   { transform: scaleY(1); }
+      12%  { transform: scaleY(.42); }
+      24%  { transform: scaleY(.86); }
+      36%  { transform: scaleY(.58); }
+      50%  { transform: scaleY(1); }
+      100% { transform: scaleY(1); }
+    }
+    @media (prefers-reduced-motion: reduce) { .b { animation: none; } }
+  </style>
+    <rect class="b b0" x="8.00" y="8.00" width="16.00" height="112.00" rx="8.00" fill="#ECEDE9"/>
+    <rect class="b b1" x="32.00" y="44.00" width="16.00" height="76.00" rx="8.00" fill="#ECEDE9"/>
+    <rect class="b b2" x="56.00" y="76.00" width="16.00" height="44.00" rx="8.00" fill="#FF4733"/>
+    <rect class="b b3" x="80.00" y="44.00" width="16.00" height="76.00" rx="8.00" fill="#ECEDE9"/>
+    <rect class="b b4" x="104.00" y="8.00" width="16.00" height="112.00" rx="8.00" fill="#ECEDE9"/>
+</svg>

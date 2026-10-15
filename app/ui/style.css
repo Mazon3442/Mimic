@@ -69,7 +69,9 @@ button { cursor: pointer; border: 0; background: none; }
   display: grid; grid-template-columns: 300px 1fr auto; align-items: center;
   background: var(--surface); padding: 14px 20px 14px 22px; gap: 24px;
 }
-.wordmark { font: 500 26px/1 var(--script); letter-spacing: -0.02em; }
+.wordmark { font: 500 26px/1 var(--script); letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
+.wordmark .mark { width: 22px; height: 22px; fill: var(--ink); flex-shrink: 0; }
+.wordmark .mark .live { fill: var(--live); }
 .gpu { display: grid; gap: 8px; }
 .engines { display: flex; gap: 4px; flex-wrap: wrap; }
 .engine {

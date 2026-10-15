@@ -17,7 +17,7 @@ const ENGINES = {
   // gb: VRAM on a GPU (null = no GPU support). cpuGb: RAM when running on the CPU (null = too heavy for a CPU).
   // Measured on an RTX 5070 Ti and, for cpuGb, on a 16-thread CPU with the GPU hidden.
   kitten:     { name: "Kitten", full: "KittenTTS 2", gb: 8.8, cpuGb: 14.5, transcript: false, license: "open", real: "about 20 s", available: true,
-                download: "about 3 GB", note: "Clones from a clip alone. About 4.7 GB VRAM with built-in voices.",
+                download: "about 1 GB model + PyTorch", note: "Clones from a clip alone. About 4.7 GB VRAM with built-in voices.",
                 tag: t => `<${t}>`, has: ["laugh", "sigh", "breath", "pause"] },
   breeze:     { name: "Breeze", full: "Breeze TTS 2", gb: 8.1, cpuGb: null, transcript: true, license: "non-commercial", real: "35 to 40 s", available: true,
                 tag: t => `(${t})`, has: ["laugh", "sigh", "breath"] },
@@ -989,6 +989,13 @@ async function selfTest(script) {
     else if (cmd === "engine") selectEngine(arg);
     else if (cmd === "voice") { const v = profiles.find(p => p.name.toLowerCase().includes(arg.toLowerCase())); if (v) selectProfile(v.id); }
     else if (cmd === "text") { $("#script").textContent = arg; renderCount(); renderPreflight(); }
+    else if (cmd === "type") { // types like a person, for demo recordings
+      $("#script").textContent = "";
+      for (const ch of arg) { $("#script").textContent += ch; renderCount(); await new Promise(r => setTimeout(r, 38)); }
+      renderPreflight();
+    }
+    else if (cmd === "play") { const t = takes.find(x => x.id === state.take); if (t) togglePlay(t); }
+    else if (cmd === "theme") { prefs.theme = arg; applyTheme(); }
     else if (cmd === "generate") { const ok = await generate(state.engine); trace(`test: generate -> ${ok} ${$("#log").textContent}`); }
     else if (cmd === "compare") { await compareAll(); trace(`test: compare -> ${takes.length} takes`); }
     else if (cmd === "save") await saveTake(takes.find(x => x.id === state.take), false);

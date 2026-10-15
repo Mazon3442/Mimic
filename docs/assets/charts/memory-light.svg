@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 368" width="880" height="368" role="img" aria-label="Memory each engine needs" font-family="'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>Memory each engine needs</title>
+<rect width="880" height="368" rx="16" fill="#F4F4F1"/>
+<text x="32" y="44" font-size="20" font-weight="600" fill="#141516">Memory each engine needs</text>
+<text x="32" y="68" font-size="14" fill="#4F5154">Peak while cloning one voice: VRAM on the GPU, RAM on the CPU</text>
+<rect x="32" y="84" width="12" height="12" rx="3" fill="#DC2F1C"/><text x="50" y="95" font-size="13" fill="#4F5154">GPU</text>
+<rect x="102" y="84" width="12" height="12" rx="3" fill="#2A78D6"/><text x="120" y="95" font-size="13" fill="#4F5154">CPU</text>
+<line x1="168.0" y1="104" x2="168.0" y2="296" stroke="#D4D4CE" stroke-width="1"/>
+<text x="168.0" y="316" font-size="12" fill="#75777A" text-anchor="middle">0 GB</text>
+<line x1="328.0" y1="104" x2="328.0" y2="296" stroke="#D4D4CE" stroke-width="1"/>
+<text x="328.0" y="316" font-size="12" fill="#75777A" text-anchor="middle">4 GB</text>
+<line x1="488.0" y1="104" x2="488.0" y2="296" stroke="#D4D4CE" stroke-width="1"/>
+<text x="488.0" y="316" font-size="12" fill="#75777A" text-anchor="middle">8 GB</text>
+<line x1="648.0" y1="104" x2="648.0" y2="296" stroke="#D4D4CE" stroke-width="1"/>
+<text x="648.0" y="316" font-size="12" fill="#75777A" text-anchor="middle">12 GB</text>
+<line x1="808.0" y1="104" x2="808.0" y2="296" stroke="#D4D4CE" stroke-width="1"/>
+<text x="808.0" y="316" font-size="12" fill="#75777A" text-anchor="middle">16 GB</text>
+<text x="152" y="136" font-size="14" fill="#141516" text-anchor="end">KittenTTS 2</text>
+<path d="M168.0,112.0 H516.0 Q520.0,112.0 520.0,116.0 V126.0 Q520.0,130.0 516.0,130.0 H168.0 Z" fill="#DC2F1C"/>
+<text x="528.0" y="125.5" font-size="13" fill="#4F5154">8.8 GB</text>
+<path d="M168.0,134.0 H744.0 Q748.0,134.0 748.0,138.0 V148.0 Q748.0,152.0 744.0,152.0 H168.0 Z" fill="#2A78D6"/>
+<text x="756.0" y="147.5" font-size="13" fill="#4F5154">14.5 GB</text>
+<text x="152" y="200" font-size="14" fill="#141516" text-anchor="end">Qwen3-TTS 1.7B</text>
+<path d="M168.0,176.0 H352.0 Q356.0,176.0 356.0,180.0 V190.0 Q356.0,194.0 352.0,194.0 H168.0 Z" fill="#DC2F1C"/>
+<text x="364.0" y="189.5" font-size="13" fill="#4F5154">4.7 GB</text>
+<path d="M168.0,198.0 H600.0 Q604.0,198.0 604.0,202.0 V212.0 Q604.0,216.0 600.0,216.0 H168.0 Z" fill="#2A78D6"/>
+<text x="612.0" y="211.5" font-size="13" fill="#4F5154">10.9 GB</text>
+<text x="152" y="264" font-size="14" fill="#141516" text-anchor="end">Qwen3-TTS 0.6B</text>
+<path d="M168.0,240.0 H260.0 Q264.0,240.0 264.0,244.0 V254.0 Q264.0,258.0 260.0,258.0 H168.0 Z" fill="#DC2F1C"/>
+<text x="272.0" y="253.5" font-size="13" fill="#4F5154">2.4 GB</text>
+<path d="M168.0,262.0 H388.0 Q392.0,262.0 392.0,266.0 V276.0 Q392.0,280.0 388.0,280.0 H168.0 Z" fill="#2A78D6"/>
+<text x="400.0" y="275.5" font-size="13" fill="#4F5154">5.6 GB</text>
+<text x="32" y="346" font-size="12" fill="#75777A">Measured with Mimic on an RTX 5070 Ti (16 GB) and a 16-thread CPU with the GPU hidden.</text>
+</svg>

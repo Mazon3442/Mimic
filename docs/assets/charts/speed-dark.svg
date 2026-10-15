@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 304" width="880" height="304" role="img" aria-label="Seconds to generate one second of speech" font-family="'IBM Plex Sans', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<title>Seconds to generate one second of speech</title>
+<rect width="880" height="304" rx="16" fill="#111213"/>
+<text x="32" y="44" font-size="20" font-weight="600" fill="#ECEDE9">Seconds to generate one second of speech</text>
+<text x="32" y="68" font-size="14" fill="#A9ABA6">Lower is faster. Same three-sentence script, engine already loaded</text>
+<rect x="32" y="84" width="12" height="12" rx="3" fill="#FF4733"/><text x="50" y="95" font-size="13" fill="#A9ABA6">GPU</text>
+<rect x="102" y="84" width="12" height="12" rx="3" fill="#3987E5"/><text x="120" y="95" font-size="13" fill="#A9ABA6">CPU</text>
+<line x1="168.0" y1="104" x2="168.0" y2="232" stroke="#2A2B2F" stroke-width="1"/>
+<text x="168.0" y="252" font-size="12" fill="#7A7C7F" text-anchor="middle">0 s</text>
+<line x1="381.3" y1="104" x2="381.3" y2="232" stroke="#2A2B2F" stroke-width="1"/>
+<text x="381.3" y="252" font-size="12" fill="#7A7C7F" text-anchor="middle">2 s</text>
+<line x1="594.7" y1="104" x2="594.7" y2="232" stroke="#2A2B2F" stroke-width="1"/>
+<text x="594.7" y="252" font-size="12" fill="#7A7C7F" text-anchor="middle">4 s</text>
+<line x1="808.0" y1="104" x2="808.0" y2="232" stroke="#2A2B2F" stroke-width="1"/>
+<text x="808.0" y="252" font-size="12" fill="#7A7C7F" text-anchor="middle">6 s</text>
+<text x="152" y="136" font-size="14" fill="#ECEDE9" text-anchor="end">Qwen3-TTS 1.7B</text>
+<path d="M168.0,112.0 H368.8 Q372.8,112.0 372.8,116.0 V126.0 Q372.8,130.0 368.8,130.0 H168.0 Z" fill="#FF4733"/>
+<text x="380.8" y="125.5" font-size="13" fill="#A9ABA6">1.92 s</text>
+<path d="M168.0,134.0 H758.1 Q762.1,134.0 762.1,138.0 V148.0 Q762.1,152.0 758.1,152.0 H168.0 Z" fill="#3987E5"/>
+<text x="770.1" y="147.5" font-size="13" fill="#A9ABA6">5.57 s</text>
+<text x="152" y="200" font-size="14" fill="#ECEDE9" text-anchor="end">Qwen3-TTS 0.6B</text>
+<path d="M168.0,176.0 H372.0 Q376.0,176.0 376.0,180.0 V190.0 Q376.0,194.0 372.0,194.0 H168.0 Z" fill="#FF4733"/>
+<text x="384.0" y="189.5" font-size="13" fill="#A9ABA6">1.95 s</text>
+<path d="M168.0,198.0 H664.3 Q668.3,198.0 668.3,202.0 V212.0 Q668.3,216.0 664.3,216.0 H168.0 Z" fill="#3987E5"/>
+<text x="676.3" y="211.5" font-size="13" fill="#A9ABA6">4.69 s</text>
+<text x="32" y="282" font-size="12" fill="#7A7C7F">Measured with Mimic on an RTX 5070 Ti and a 16-thread CPU. A laptop CPU will be slower.</text>
+</svg>

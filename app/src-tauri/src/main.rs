@@ -471,8 +471,12 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|tauri_app| {
             let handle = tauri_app.handle().clone();
-            let data = handle.path().app_data_dir()?;
-            let local = handle.path().app_local_data_dir()?;
+            // MIMIC_DATA_DIR gives a separate set of profiles, settings and takes (demos, screenshots, tests).
+            // Keep it inside the app data folder so the audio player is allowed to read it.
+            let (data, local) = match std::env::var_os("MIMIC_DATA_DIR") {
+                Some(dir) => (PathBuf::from(&dir), PathBuf::from(&dir).join("local")),
+                None => (handle.path().app_data_dir()?, handle.path().app_local_data_dir()?),
+            };
             let dirs = Dirs {
                 resources: resources_dir(&handle),
                 voices: data.join("voices"),

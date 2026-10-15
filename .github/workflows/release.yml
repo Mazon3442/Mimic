@@ -1,5 +1,8 @@
-# Push a version tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`) to build the Windows
-# installer and publish it as a GitHub release for that tag.
+# Push an annotated version tag to build Windows and Linux packages and publish one GitHub release.
+# The release notes are the tag's message, exactly as written:
+#   git tag -a v1.0.0 --cleanup=verbatim -F notes.md
+#   git push origin v1.0.0
+# --cleanup=verbatim keeps Markdown headings; without it git deletes every line starting with "#".
 name: Release
 
 on:
@@ -7,7 +10,7 @@ on:
     tags: ["v*.*.*"]
 
 permissions:
-  contents: write # create the release and upload the installer
+  contents: write # create the release and upload the packages
 
 jobs:
   windows:
@@ -38,12 +41,11 @@ jobs:
         shell: bash
         run: npx --yes @tauri-apps/cli@2 build --config "{\"version\":\"${{ steps.version.outputs.number }}\"}"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          name: Mimic ${{ github.ref_name }}
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }} # v1.0.0-beta.1 is marked as a pre-release
-          files: app/src-tauri/target/release/bundle/nsis/*.exe
+          name: windows
+          path: app/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
 
   # .deb, .rpm and AppImage. Arch users can build from packaging/arch/PKGBUILD instead.
   linux:
@@ -76,11 +78,42 @@ jobs:
       - name: Build packages
         run: npx --yes @tauri-apps/cli@2 build --bundles deb,rpm,appimage --config "{\"version\":\"${{ steps.version.outputs.number }}\"}"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          name: Mimic ${{ github.ref_name }}
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          files: |
+          name: linux
+          path: |
             app/src-tauri/target/release/bundle/deb/*.deb
             app/src-tauri/target/release/bundle/rpm/*.rpm
             app/src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+  # One job publishes the release once both builds succeed, so the two never race to create it.
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # actions/checkout turns annotated tags into lightweight ones, so fetch the real tag object first.
+      - name: Read release notes from the tag message
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          if [ "$(git cat-file -t "refs/tags/${GITHUB_REF_NAME}")" = "tag" ]; then
+            git for-each-ref --format='%(contents)' "refs/tags/${GITHUB_REF_NAME}" > notes.md
+          else
+            echo "::warning::${GITHUB_REF_NAME} is not an annotated tag, so the release has no notes. Use: git tag -a ${GITHUB_REF_NAME} --cleanup=verbatim -F notes.md"
+            : > notes.md
+          fi
+          cat notes.md
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Mimic ${{ github.ref_name }}
+          body_path: notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }} # v1.0.0-beta.1 is marked as a pre-release
+          files: dist/*
