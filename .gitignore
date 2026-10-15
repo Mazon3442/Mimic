@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*-env/
+hfenv/
+
+# Models and weights (huge, downloaded separately)
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.gguf
+
+# Generated audio, reference clips, logs (never commit voice recordings)
+out/
+refs/
+logs/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.opus
+*.aac
+*.reference.txt
+
+# ComfyUI
+ComfyUI/
+
+# Local config / OS
+.env
+.DS_Store
+Thumbs.db
+desktop.ini
