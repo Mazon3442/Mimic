@@ -69,8 +69,8 @@ button { cursor: pointer; border: 0; background: none; }
   display: grid; grid-template-columns: 300px 1fr auto; align-items: center;
   background: var(--surface); padding: 14px 20px 14px 22px; gap: 24px;
 }
-.wordmark { font: 500 26px/1 var(--script); letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
-.wordmark .mark { width: 22px; height: 22px; fill: var(--ink); flex-shrink: 0; }
+.wordmark { font: 500 clamp(28px, 1.6vw + 6px, 48px)/1 var(--script); letter-spacing: -0.02em; display: flex; align-items: center; gap: 0.36em; }
+.wordmark .mark { width: 0.86em; height: 0.86em; fill: var(--ink); flex-shrink: 0; overflow: visible; }
 .wordmark .mark .live { fill: var(--live); }
 .gpu { display: grid; gap: 8px; }
 .engines { display: flex; gap: 4px; flex-wrap: wrap; }
@@ -150,7 +150,6 @@ textarea.transcript:disabled { color: var(--ink-3); }
 .defaults b { color: var(--ink); font-weight: 500; }
 .defaults .btn { white-space: nowrap; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.voice-add { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 10px 16px; }
 
 .btn {
   padding: 7px 12px; border-radius: var(--r); background: var(--surface-3); color: var(--ink); font-weight: 500;
@@ -351,3 +350,113 @@ select.sel { padding: 6px 28px 6px 10px; background: var(--field); border: 1px s
   .engine { padding: 6px 9px; }
 }
 input.num.secret { width: 220px; font-family: inherit; }
+
+/* ---------- logo motion: the M's bars move like a level meter ---------- */
+.mark rect { transform-box: fill-box; transform-origin: 50% 100%; }
+/* One loop runs while "talk" is set; every bar is back at full height at the loop's edges, so stopping there never jumps. */
+.mark.talk rect { animation: 1.3s var(--ease-in-out) infinite; }
+.mark.talk rect:nth-child(1), .mark.talk rect:nth-child(5) { animation-name: talk-edge; }
+.mark.talk rect:nth-child(2), .mark.talk rect:nth-child(4) { animation-name: talk-inner; }
+.mark.talk rect:nth-child(3) { animation-name: talk-center; }
+@keyframes talk-edge { 0%, 100% { transform: scaleY(1); } 22% { transform: scaleY(0.45); } 48% { transform: scaleY(0.85); } 72% { transform: scaleY(0.4); } }
+@keyframes talk-inner { 0%, 100% { transform: scaleY(1); } 28% { transform: scaleY(1.4); } 54% { transform: scaleY(0.6); } 78% { transform: scaleY(1.25); } }
+@keyframes talk-center { 0%, 100% { transform: scaleY(1); } 34% { transform: scaleY(2.4); } 60% { transform: scaleY(1.3); } 84% { transform: scaleY(2.2); } }
+
+/* ---------- startup: the bars rise, the name follows, then the app shows through ---------- */
+.splash { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: var(--ground); pointer-events: none; transition: opacity 360ms var(--ease-out); }
+.splash.out { opacity: 0; }
+.splash-inner { display: flex; align-items: center; gap: 22px; font: 500 64px/1 var(--script); letter-spacing: -0.02em; transition: transform 360ms var(--ease-out); }
+.splash.out .splash-inner { transform: scale(1.04); }
+.splash .mark { width: 56px; height: 56px; fill: var(--ink); overflow: visible; }
+.splash .mark .live { fill: var(--live); }
+.splash .mark rect { animation: rise 560ms var(--ease-out) both; }
+.splash .mark rect:nth-child(2), .splash .mark rect:nth-child(4) { animation-delay: 70ms; }
+.splash .mark rect:nth-child(3) { animation-delay: 140ms; }
+.splash-inner > span { animation: name-in 520ms var(--ease-out) 260ms both; }
+@keyframes rise { from { transform: scaleY(0); } }
+@keyframes name-in { from { opacity: 0; transform: translateX(-10px); filter: blur(4px); } }
+
+/* ---------- new voice ---------- */
+.voices-head { align-items: center; }
+.voices-head h2 .meta { font-weight: 400; margin-left: 6px; }
+.btn.new-voice { display: inline-flex; align-items: center; gap: 6px; background: var(--live); color: var(--live-ink); }
+.btn.new-voice svg { width: 12px; height: 12px; }
+@media (hover: hover) and (pointer: fine) { .btn.new-voice:hover:not(:disabled) { background: var(--live); color: var(--live-ink); filter: brightness(1.08); } }
+.onboard { margin: 4px 10px 8px; padding: 14px; border-radius: var(--r-lg); border: 1px dashed var(--field-line); display: grid; gap: 10px; }
+.onboard b { font-size: 15px; }
+.onboard p { color: var(--ink-2); font-size: 13px; }
+.onboard .row { flex-wrap: nowrap; }
+.onboard .btn { flex: 1; }
+.newvoice { width: 620px; padding: 22px 24px 20px; display: grid; gap: 16px; }
+.newvoice h3, .update h3 { font: 600 17px/1.2 var(--ui); }
+.newvoice .why, .update .why { color: var(--ink-2); }
+.nv-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.nv-choice { display: grid; gap: 6px; justify-items: start; align-content: start; text-align: left; padding: 18px 16px; border-radius: var(--r-lg); background: var(--surface); transition: background-color 120ms ease, transform 120ms var(--ease-out), box-shadow 120ms ease; }
+.nv-choice svg { width: 26px; height: 26px; color: var(--live); margin-bottom: 4px; }
+.nv-choice b { font-size: 15px; font-weight: 600; }
+.nv-choice span { color: var(--ink-2); font-size: 13px; }
+.nv-choice:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { .nv-choice:hover { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--live); } }
+.nv-steps { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 13px; display: grid; gap: 3px; }
+.nv-steps b { color: var(--ink); font-weight: 500; }
+.nv-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.nv-foot .up-status { margin-right: auto; color: var(--ink-2); font-size: 13px; }
+body.dropping .app::after { content: "Drop audio to make a new voice"; position: fixed; inset: 10px; z-index: 50; display: grid; place-items: center; border: 2px dashed var(--live); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ground) 82%, transparent); font: 500 26px/1 var(--script); pointer-events: none; }
+
+/* ---------- controls drawer ---------- */
+.main { position: relative; }
+.chip.controls-btn { display: inline-flex; align-items: center; gap: 7px; }
+.chip.controls-btn svg { width: 15px; height: 15px; }
+.chip.controls-btn[aria-expanded="true"] { background: var(--ink); color: var(--ground); }
+.chip.controls-btn .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); }
+.chip.controls-btn .dot[hidden] { display: none; }
+.links { align-items: center; }
+/* Slides over the Voices column, so the script and the takes it produces stay in view. */
+.drawer { position: absolute; top: 0; left: 0; bottom: 0; width: 300px; z-index: 5; display: grid; grid-template-rows: auto 1fr; background: var(--surface); box-shadow: 18px 0 40px rgba(0,0,0,.28);
+  transform: translateX(-104%); visibility: hidden; transition: transform 240ms var(--ease-out), visibility 0s linear 240ms; }
+.drawer.open { transform: none; visibility: visible; transition: transform 240ms var(--ease-out); }
+.drawer-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 22px 10px 12px 22px; }
+.drawer-head h2 { font: 600 15px/1.2 var(--ui); }
+.drawer-head .meta { color: var(--ink-3); font-size: 12px; margin-top: 3px; }
+.drawer-head .row { flex-wrap: nowrap; }
+.drawer-head .quiet { white-space: nowrap; }
+.drawer-body { overflow-y: auto; padding: 0 10px 16px; display: grid; gap: 6px; align-content: start; }
+.ctl { background: var(--surface-2); border-radius: var(--r-lg); padding: 12px 14px; display: grid; gap: 8px; }
+.ctl-top { display: flex; align-items: center; gap: 9px; }
+.ctl-top svg { width: 15px; height: 15px; color: var(--ink-2); flex-shrink: 0; }
+.ctl-top b { font-weight: 600; margin-right: auto; }
+.ctl-val { color: var(--live); font-weight: 600; font-size: 13px; }
+.ctl-val.def { color: var(--ink-2); font-weight: 500; }
+.ctl-reset { color: var(--ink-3); font-size: 12px; padding: 0 2px; }
+@media (hover: hover) and (pointer: fine) { .ctl-reset:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; } }
+.ctl p { color: var(--ink-3); font-size: 12px; }
+.ctl .row { flex-wrap: nowrap; }
+.ctl-none { color: var(--ink-2); padding: 4px 10px 8px; font-size: 13px; }
+.ctl-group { color: var(--ink-3); font-size: 12px; padding: 10px 4px 2px; }
+input.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; background: transparent; cursor: pointer; margin: 0; }
+input.slider:focus-visible { outline: none; }
+input.slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--live) var(--pct, 0%), var(--surface-3) var(--pct, 0%)); }
+input.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--ink); box-shadow: 0 0 0 3px var(--surface-2); transition: transform 120ms var(--ease-out); }
+input.slider:active::-webkit-slider-thumb { transform: scale(1.15); }
+input.slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--surface-2), 0 0 0 5px var(--ink); }
+
+/* ---------- updates ---------- */
+.update-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--live) 16%, transparent); color: var(--ink); font-size: 13px; font-weight: 500; transition: background-color 120ms ease, transform 120ms var(--ease-out); }
+.update-pill[hidden] { display: none; }
+.update-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+.update-pill:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .update-pill:hover { background: color-mix(in srgb, var(--live) 26%, transparent); } }
+.update { width: 560px; padding: 22px 24px 20px; display: grid; gap: 14px; }
+.up-notes { max-height: 40vh; overflow-y: auto; background: var(--surface); border-radius: var(--r); padding: 12px 14px; color: var(--ink-2); font-size: 13px; display: grid; gap: 6px; }
+.up-notes:empty { display: none; }
+.up-notes h5 { font: 600 13px/1.3 var(--ui); color: var(--ink); margin-top: 4px; }
+.up-notes ul { padding-left: 18px; display: grid; gap: 2px; }
+.up-warn { color: var(--warn); font-size: 13px; }
+.up-warn[hidden], .up-progress[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .splash { display: none; }
+  .mark.talk rect { animation: none !important; }
+  .drawer, .drawer.open { transition: none; }
+}
+@media (max-width: 1180px) { .drawer { width: 280px; } }

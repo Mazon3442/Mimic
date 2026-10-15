@@ -7,12 +7,15 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-inner"><svg class="mark" viewBox="0 0 112 112" aria-hidden="true"><rect x="0" y="0" width="16" height="112" rx="8"/><rect x="24" y="36" width="16" height="76" rx="8"/><rect class="live" x="48" y="68" width="16" height="44" rx="8"/><rect x="72" y="36" width="16" height="76" rx="8"/><rect x="96" y="0" width="16" height="112" rx="8"/></svg><span>Mimic</span></div>
+</div>
 <div class="app">
 
   <header class="top">
     <div class="wordmark">
-      <svg class="mark" viewBox="0 0 112 112" aria-hidden="true"><rect x="0" y="0" width="16" height="112" rx="8"/><rect x="24" y="36" width="16" height="76" rx="8"/><rect class="live" x="48" y="68" width="16" height="44" rx="8"/><rect x="72" y="36" width="16" height="76" rx="8"/><rect x="96" y="0" width="16" height="112" rx="8"/></svg>
-      Mimic
+      <svg class="mark" id="logoMark" viewBox="0 0 112 112" aria-hidden="true"><rect x="0" y="0" width="16" height="112" rx="8"/><rect x="24" y="36" width="16" height="76" rx="8"/><rect class="live" x="48" y="68" width="16" height="44" rx="8"/><rect x="72" y="36" width="16" height="76" rx="8"/><rect x="96" y="0" width="16" height="112" rx="8"/></svg>
+      <span>Mimic</span>
     </div>
     <div class="gpu">
       <div class="engines" role="group" aria-label="Engine" id="engineBtns"></div>
@@ -23,6 +26,7 @@
       <div class="hint" id="hint"></div>
     </div>
     <div class="top-actions">
+      <button class="update-pill" id="updateBtn" hidden></button>
       <button class="quiet settings-btn" id="settingsBtn" title="Settings (Ctrl ,)">
         <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 8h2M8 8h6M2 12h8M14 12h0"/><circle cx="11" cy="4" r="1.8"/><circle cx="6" cy="8" r="1.8"/><circle cx="12" cy="12" r="1.8"/></svg>
         Settings
@@ -32,13 +36,14 @@
 
   <main class="main">
     <section class="col col-voices" aria-label="Voice profiles">
-      <div class="col-head"><h2>Voices</h2><span class="meta" id="voiceCount"></span></div>
+      <div class="col-head voices-head">
+        <h2>Voices <span class="meta" id="voiceCount"></span></h2>
+        <button class="btn small new-voice" id="newVoiceBtn" title="Clone a voice from a recording or an audio file">
+          <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>New voice
+        </button>
+      </div>
       <div class="scroll" id="voiceList" role="listbox" aria-label="Voice profiles"></div>
       <div class="voice-detail" id="voiceDetail"></div>
-      <div class="voice-add">
-        <button class="btn" id="recordBtn">Record</button>
-        <button class="btn" id="importBtn">Import file</button>
-      </div>
     </section>
 
     <section class="col col-script" aria-label="Script">
@@ -54,8 +59,10 @@
         <input class="instr" id="instr" hidden>
         <div class="composer-actions">
           <div class="links">
+            <button class="chip controls-btn" id="controlsBtn" aria-expanded="false" aria-controls="controls" title="Speed, sampling and seed for this engine">
+              <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 8h2M8 8h6M2 12h8M14 12h0"/><circle cx="11" cy="4" r="1.8"/><circle cx="6" cy="8" r="1.8"/><circle cx="12" cy="12" r="1.8"/></svg>Controls<span class="dot" hidden></span>
+            </button>
             <button class="link" id="compareBtn">Compare engines</button>
-            <button class="link" data-menu="options" aria-expanded="false">Options</button>
           </div>
           <button class="btn live" id="genBtn">Generate <kbd>Ctrl Enter</kbd></button>
         </div>
@@ -70,6 +77,17 @@
       <div class="scroll" id="takeList" role="listbox" aria-label="Takes"></div>
       <p class="takes-note">Takes stay in a temporary cache until you save them. Unsaved takes are cleared when Mimic closes.</p>
     </section>
+
+    <aside class="drawer" id="controls" aria-label="Controls" inert>
+      <div class="drawer-head">
+        <div><h2>Controls</h2><p class="meta" id="controlsFor"></p></div>
+        <div class="row">
+          <button class="quiet" id="controlsReset">Reset all</button>
+          <button class="btn icon" id="controlsClose" aria-label="Close controls" title="Close (Esc)"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>
+        </div>
+      </div>
+      <div class="drawer-body" id="controlsBody"></div>
+    </aside>
   </main>
 
   <footer class="status">
@@ -93,6 +111,40 @@
   <div class="dialog" role="dialog" aria-label="Commands">
     <input class="palette-input" id="paletteInput" placeholder="Type a command" autocomplete="off">
     <ul class="palette-list" id="paletteList"></ul>
+  </div>
+</div>
+
+<div class="overlay" id="newVoiceDlg">
+  <div class="dialog newvoice" role="dialog" aria-labelledby="nvTitle">
+    <h3 id="nvTitle">Clone a new voice</h3>
+    <p class="why">Mimic copies a voice from a short, clean clip of one person talking. Pick where the clip comes from.</p>
+    <div class="nv-choices">
+      <button class="nv-choice" id="nvRecord">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>
+        <b>Record your voice</b><span>Read a short passage aloud with your microphone. Takes about 15 seconds.</span>
+      </button>
+      <button class="nv-choice" id="nvImport">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9.5 16.5v-3M12 17.5v-5M14.5 16.5v-3"/></svg>
+        <b>Use an audio file</b><span>WAV, MP3, FLAC, M4A and more. 5 to 30 seconds of one speaker works best.</span>
+      </button>
+    </div>
+    <ol class="nv-steps">
+      <li><b>Add a clip.</b> You can also drop audio files anywhere on this window.</li>
+      <li><b>Mimic writes the transcript</b> on this PC. No typing needed.</li>
+      <li><b>Write a script</b> in the middle and press Generate.</li>
+    </ol>
+    <div class="nv-foot"><button class="btn" id="nvCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="updateDlg">
+  <div class="dialog update" role="dialog" aria-labelledby="upTitle">
+    <h3 id="upTitle"></h3>
+    <p class="why" id="upCurrent"></p>
+    <div class="up-notes" id="upNotes"></div>
+    <p class="up-warn" id="upWarn" hidden></p>
+    <div class="level up-progress" hidden><span id="upBar"></span></div>
+    <div class="nv-foot"><span class="up-status" id="upStatus"></span><div class="row"><button class="btn" id="upLater">Later</button><button class="btn live" id="upInstall">Install and restart</button></div></div>
   </div>
 </div>
 

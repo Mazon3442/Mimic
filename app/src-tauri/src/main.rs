@@ -19,6 +19,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use store::{Profile, Settings};
 use tauri::{AppHandle, Emitter, Manager as _, RunEvent, State};
 use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_updater::UpdaterExt;
 use worker::Worker;
 
 struct Dirs {
@@ -419,6 +420,53 @@ fn managed(home: &Path) -> Value {
     install::downloadable().iter().map(|id| (id.to_string(), Value::from(install::is_installed(home, id)))).collect::<serde_json::Map<_, _>>().into()
 }
 
+// ---------------------------------------------------------------- updates
+
+/// The package manager that owns this install when a distro package built it (set by packaging/arch/PKGBUILD).
+/// Such installs hear about new versions but get them from that package manager, not from the updater.
+const PACKAGE_MANAGER: Option<&str> = option_env!("MIMIC_PACKAGE");
+
+/// The newest GitHub release, if it's newer than this build. Development builds never offer one.
+#[tauri::command]
+async fn check_update(handle: AppHandle) -> Result<Option<Value>, String> {
+    if cfg!(debug_assertions) {
+        return Ok(None);
+    }
+    let update = handle.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| format!("Couldn't check for updates: {e}"))?;
+    Ok(update.map(|u| json!({
+        "version": u.version, "current": u.current_version, "notes": u.body.clone().unwrap_or_default(),
+        "packageManager": PACKAGE_MANAGER,
+    })))
+}
+
+/// Download the newest release, install it and restart into it. Progress arrives as "update-progress" events.
+#[tauri::command]
+async fn install_update(handle: AppHandle) -> Result<(), String> {
+    if let Some(manager) = PACKAGE_MANAGER {
+        return Err(format!("This copy of Mimic was installed with {manager}. Update it there."));
+    }
+    let update = handle
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| format!("Couldn't check for updates: {e}"))?
+        .ok_or("Mimic is already up to date.")?;
+    let h = handle.clone();
+    let mut done = 0u64;
+    update
+        .download_and_install(
+            move |chunk, total| {
+                done += chunk as u64;
+                let _ = h.emit("update-progress", json!({ "done": done, "total": total }));
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("Couldn't install the update: {e}"))?;
+    handle.restart()
+}
+
 // ---------------------------------------------------------------- setup
 
 fn resources_dir(handle: &AppHandle) -> PathBuf {
@@ -469,6 +517,7 @@ fn main() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|tauri_app| {
             let handle = tauri_app.handle().clone();
             // MIMIC_DATA_DIR gives a separate set of profiles, settings and takes (demos, screenshots, tests).
@@ -564,7 +613,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             bootstrap, save_settings, save_profile, delete_profile, import_clip, save_recording, transcribe,
             peaks, generate, cancel, unload, preload, save_take, save_take_as, delete_take, pick_folder, reveal, ui_error,
-            install_engine, remove_engine, test_script, import_path
+            install_engine, remove_engine, test_script, import_path, check_update, install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mimic")

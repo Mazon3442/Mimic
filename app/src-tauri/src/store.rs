@@ -1,6 +1,7 @@
 //! Settings and voice profiles, kept as JSON in the app data folder.
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -27,6 +28,8 @@ pub struct Settings {
     pub device: String,
     /// Hugging Face access token, for models that need an account (NeuTTS). Stays on this PC.
     pub hf_token: String,
+    /// Controls panel values the user changed, per engine (engine -> control -> value). Unset means the engine's default.
+    pub controls: BTreeMap<String, BTreeMap<String, f64>>,
 }
 
 impl Default for Settings {
@@ -50,6 +53,7 @@ impl Default for Settings {
             pinned: vec![],
             device: "Automatic".into(),
             hf_token: String::new(),
+            controls: BTreeMap::new(),
         }
     }
 }

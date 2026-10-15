@@ -34,7 +34,40 @@ const ENGINES = {
                 linuxOnly: true, needsAccount: true,
                 note: "Made for laptops: always runs on the CPU in about 1 GB. Clips of 3 to 15 s. Needs a free Hugging Face account.", tag: () => "", has: [] },
 };
-const PIN_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M6 2h4l-.6 4 2.6 2.4V10H4V8.4L6.6 6z"/><path d="M8 10v4" stroke-linecap="round"/></svg>`;
+// ---------- controls panel ----------
+// What each slider means. Values the user changes are kept per engine in prefs.controls and sent with every take.
+const ICONS16 = {
+  speed: `<path d="M2.5 11.5a5.5 5.5 0 1 1 11 0"/><path d="M8 11.5l2.6-3.4"/>`,
+  temp: `<path d="M6.5 9.3V3a1.5 1.5 0 0 1 3 0v6.3a3 3 0 1 1-3 0z"/><path d="M8 6.5v4.5"/>`,
+  funnel: `<path d="M2.5 3h11l-4.2 5v4.5l-2.6 1.2V8z"/>`,
+  list: `<path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.5" cy="4" r=".6"/><circle cx="2.5" cy="8" r=".6"/><circle cx="2.5" cy="12" r=".6"/>`,
+  repeat: `<path d="M3 7V6a2 2 0 0 1 2-2h7.5M10.5 2l2 2-2 2M13 9v1a2 2 0 0 1-2 2H3.5M5.5 14l-2-2 2-2"/>`,
+  target: `<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="2.5"/>`,
+  pause: `<path d="M2 8h2.5M11.5 8H14"/><rect x="6" y="4" width="1.4" height="8" rx=".7"/><rect x="8.6" y="4" width="1.4" height="8" rx=".7"/>`,
+  dice: `<rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><circle cx="5.7" cy="5.7" r=".7"/><circle cx="10.3" cy="10.3" r=".7"/><circle cx="8" cy="8" r=".7"/>`,
+};
+const icon16 = name => `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">${ICONS16[name]}</svg>`;
+const CONTROL = {
+  speed: { label: "Speed", icon: "speed", min: 0.5, max: 2, step: 0.05, unit: "×", hint: "Faster or slower, without changing the pitch." },
+  temperature: { label: "Temperature", icon: "temp", min: 0.1, max: 1.5, step: 0.05, hint: "Higher sounds livelier and less predictable. Lower is steadier." },
+  top_p: { label: "Top P", icon: "funnel", min: 0.1, max: 1, step: 0.01, hint: "Only the likeliest sounds are kept. Lower is safer, higher is more varied." },
+  top_k: { label: "Top K", icon: "list", min: 0, max: 100, step: 1, digits: 0, hint: "How many choices are weighed at each step. 0 means no limit." },
+  repetition_penalty: { label: "Repetition penalty", icon: "repeat", min: 1, max: 2, step: 0.01, hint: "Stops the voice from stalling or looping. Too high clips repeated sounds." },
+  // Breeze's plain clone template has no negative prompt, so guidance only exists in Design and Direction.
+  cfg: { label: "Guidance (CFG)", icon: "target", min: 1, max: 8, step: 0.1, digits: 1, when: () => state.breezeMode !== "Clone",
+         hint: "How strictly it follows your description. Higher is stricter." },
+  gap: { label: "Pause between sentences", icon: "pause", min: 0, max: 1, step: 0.02, unit: " s", hint: "Silence added where sentences are joined." },
+};
+// Engine defaults, read from each engine's own config. A function default follows the current style or mode.
+const kittenPreset = v => () => (state.kittenStyle === "Expressive" ? v[1] : v[0]);
+const QWEN_CONTROLS = { temperature: 0.9, top_p: 1, top_k: 50, repetition_penalty: 1.05 };
+const ENGINE_CONTROLS = {
+  kitten: { temperature: kittenPreset([0.8, 0.9]), top_p: kittenPreset([0.8, 0.9]), top_k: 50, repetition_penalty: 1.1, gap: 0.18 },
+  breeze: { cfg: 4, temperature: 0.9, top_p: 1, top_k: 0, repetition_penalty: 1.1 },
+  qwen06: QWEN_CONTROLS, qwen17: QWEN_CONTROLS,
+  neutts: { gap: 0.18 },
+};
+const PIN_ICON =`<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M6 2h4l-.6 4 2.6 2.4V10H4V8.4L6.6 6z"/><path d="M8 10v4" stroke-linecap="round"/></svg>`;
 const installing = {}; // id -> progress label while a download runs
 const ALL = Object.keys(ENGINES);
 const SOUNDS = [
@@ -212,14 +245,24 @@ function previewEngine(id) {
 function selectEngine(id) {
   if (!usable(id)) { previewEngine(id); return; }
   state.engine = id;
-  renderTop(); renderComposer(); renderPreflight(); renderDialect(); renderDetail(); renderCount();
+  renderTop(); renderComposer(); renderPreflight(); renderDialect(); renderDetail(); renderCount(); renderControls();
 }
 
 // ---------- profiles ----------
 function renderVoices() {
   const list = $("#voiceList");
   list.innerHTML = "";
-  $("#voiceCount").textContent = `${profiles.length} profile${profiles.length === 1 ? "" : "s"}`;
+  $("#voiceCount").textContent = profiles.length;
+  // Until a voice has been cloned, the list says how to clone one.
+  if (!profiles.some(p => !p.builtin)) {
+    const card = document.createElement("div");
+    card.className = "onboard";
+    card.innerHTML = `<b>Clone your first voice</b><p>Record yourself reading a short passage, or bring an audio clip of anyone speaking. You can also drop audio files on this window.</p>
+      <div class="row"><button class="btn small" data-nv="record">Record</button><button class="btn small" data-nv="import">Import a file</button></div>`;
+    card.querySelector('[data-nv="record"]').onclick = openRecorder;
+    card.querySelector('[data-nv="import"]').onclick = () => importClip();
+    list.append(card);
+  }
   for (const v of profiles) {
     const s = profileSummary(v);
     const b = document.createElement("button");
@@ -244,12 +287,12 @@ function selectProfile(id) {
   Object.assign(state, { kittenStyle: d.kittenStyle, breezeMode: d.breezeMode, seed: d.seed });
   if (usable(d.engine)) state.engine = d.engine;
   prefs.lastProfile = id; persistPrefs();
-  renderTop(); renderVoices(); renderComposer(); renderDialect(); renderPreflight();
+  renderTop(); renderVoices(); renderComposer(); renderDialect(); renderPreflight(); renderControls();
 }
 let txTimer = null;
 function renderDetail() {
   const v = currentVoice(), d = $("#voiceDetail");
-  if (!v) { d.innerHTML = `<p style="color:var(--ink-2)">No voices yet. Record one or import a clip.</p>`; return; }
+  if (!v) { d.innerHTML = `<p style="color:var(--ink-2)">No voices yet. Press New voice to clone one.</p>`; return; }
   const changed = !sameSettings(v.defaults, currentSettings());
   const defaults = `<div class="defaults"><span>Defaults: <b>${describe(v.defaults)}</b></span>
     <button class="btn small" id="saveDefaults" ${changed ? "" : "disabled"}>${changed ? "Save current" : "Saved"}</button></div>`;
@@ -313,9 +356,10 @@ async function transcribe(v) {
   }
   renderVoices(); renderPreflight();
 }
+// With a path (dropped files, test runs) the clip is imported directly; without one, a file picker opens.
 async function importClip(path) {
   try {
-    const p = path ? await invoke("import_path", { path }) : await invoke("import_clip");
+    const p = typeof path === "string" ? await invoke("import_path", { path }) : await invoke("import_clip");
     if (!p) return;
     replaceProfile(p); selectProfile(p.id);
     $("#pname")?.select();
@@ -324,9 +368,18 @@ async function importClip(path) {
 }
 // Drop audio files anywhere on the window to make profiles from them.
 const AUDIO = /\.(wav|mp3|flac|ogg|m4a|aac|opus|wma|mp4)$/i;
+listen("tauri://drag-enter", ({ payload }) => document.body.classList.toggle("dropping", (payload.paths || []).some(p => AUDIO.test(p))));
+listen("tauri://drag-leave", () => document.body.classList.remove("dropping"));
 listen("tauri://drag-drop", async ({ payload }) => {
-  for (const path of (payload.paths || []).filter(p => AUDIO.test(p))) await importClip(path);
+  document.body.classList.remove("dropping");
+  const clips = (payload.paths || []).filter(p => AUDIO.test(p));
+  if (clips.length) closeNewVoice();
+  for (const path of clips) await importClip(path);
 });
+
+// The one way in to cloning: record a clip or bring a file.
+function openNewVoice() { $("#newVoiceDlg").classList.add("open"); $("#nvRecord").focus(); }
+function closeNewVoice() { $("#newVoiceDlg").classList.remove("open"); }
 
 // ---------- script ----------
 function scriptText(engine) {
@@ -421,7 +474,8 @@ let menuFor = null;
 function menuHtml(kind) {
   const e = ENGINES[state.engine];
   if (kind === "voice") return `<p class="menu-title">Voice profile</p>` + profiles.map(v =>
-    `<button class="mi" data-v="${v.id}" aria-checked="${v.id === state.voice}"><b>${escapeHtml(v.name)}<em>${v.builtin ? "built-in" : v.duration.toFixed(1) + " s"}</em></b><span>${profileSummary(v).text}</span></button>`).join("");
+    `<button class="mi" data-v="${v.id}" aria-checked="${v.id === state.voice}"><b>${escapeHtml(v.name)}<em>${v.builtin ? "built-in" : v.duration.toFixed(1) + " s"}</em></b><span>${profileSummary(v).text}</span></button>`).join("")
+    + `<div class="menu-sep"></div><button class="mi" data-newvoice><b>New voice…</b><span>Record a clip or import an audio file</span></button>`;
   if (kind === "engine") return `<p class="menu-title">Engine</p>` + ALL.filter(id => ENGINES[id].available && listed(id)).map(id => {
     const x = ENGINES[id], [label] = engineLabel(id);
     return `<button class="mi" data-e="${id}" aria-checked="${id === state.engine}" ${usable(id) ? "" : "disabled"}><b>${x.name}<em>${label}</em></b><span>${memText(id)} · ${x.transcript ? "clip + transcript" : "clip only"}</span></button>`;
@@ -432,8 +486,6 @@ function menuHtml(kind) {
     const ok = tagsFor(state.engine).includes(s);
     return `<button class="mi" data-sound="${s}"><b>${s[0].toUpperCase() + s.slice(1)}<em>${ok ? escapeHtml(e.tag(s)) : `${e.name} skips it`}</em></b><span>${d}</span></button>`;
   }).join("");
-  if (kind === "options") return `<div class="opt"><b>Seed</b><div class="row"><input class="num" id="seed" value="${state.seed}" inputmode="numeric"><button class="btn small" id="reseed">New seed</button></div>
-    <p>The same seed and text give the same take. A new seed gives a different reading of the same line.</p></div>`;
   return "";
 }
 function openMenu(kind, trigger) {
@@ -450,11 +502,6 @@ function openMenu(kind, trigger) {
   m.style.left = `${left}px`;
   m.style.top = `${above ? r.top - mh - 8 : r.bottom + 8}px`;
   m.style.setProperty("--origin", `${r.left - left + r.width / 2}px ${above ? "100%" : "0"}`);
-  if (kind === "options") {
-    $("#seed").oninput = ev => { state.seed = parseInt(ev.target.value, 10) || 0; renderDetail(); };
-    $("#reseed").onclick = () => { state.seed = Math.floor(Math.random() * 99999); $("#seed").value = state.seed; renderDetail(); };
-    $("#seed").focus();
-  }
 }
 function closeMenu() {
   if (!menuFor) return;
@@ -465,8 +512,9 @@ $("#menu").onclick = ev => {
   const b = ev.target.closest(".mi"); if (!b || b.disabled) return;
   if (b.dataset.v) { closeMenu(); selectProfile(b.dataset.v); }
   else if (b.dataset.e) { closeMenu(); selectEngine(b.dataset.e); }
-  else if (b.dataset.mode) { state[MODES[state.engine].key] = b.dataset.mode; renderComposer(); renderPreflight(); renderDetail(); renderDialect(); renderCount(); }
+  else if (b.dataset.mode) { state[MODES[state.engine].key] = b.dataset.mode; renderComposer(); renderPreflight(); renderDetail(); renderDialect(); renderCount(); renderControls(); }
   else if ("engines" in b.dataset) { closeMenu(); openEngines(); }
+  else if ("newvoice" in b.dataset) { closeMenu(); openNewVoice(); }
   else if (b.dataset.sound) { closeMenu(); insertTag(b.dataset.sound); }
 };
 document.addEventListener("click", ev => {
@@ -475,8 +523,85 @@ document.addEventListener("click", ev => {
   if (menuFor && !ev.target.closest("#menu")) closeMenu();
 });
 
+// ---------- controls drawer ----------
+// Every engine gets Speed (applied after generation); the rest are the engine's own sampling knobs.
+// Only controls that apply in the current mode are shown and sent; the others keep their saved values for later.
+const ownControls = engine => Object.keys(ENGINE_CONTROLS[engine] || {}).filter(k => CONTROL[k].when?.() ?? true);
+function controlDefault(engine, key) {
+  const d = key === "speed" ? 1 : ENGINE_CONTROLS[engine][key];
+  return typeof d === "function" ? d() : d;
+}
+const changedControls = engine => prefs.controls?.[engine] || {};
+const sentControls = engine => Object.fromEntries(Object.entries(changedControls(engine)).filter(([k]) => k === "speed" || ownControls(engine).includes(k)));
+const controlValue = (engine, key) => changedControls(engine)[key] ?? controlDefault(engine, key);
+const fmtControl = (key, v) => `${v.toFixed(CONTROL[key].digits ?? 2)}${CONTROL[key].unit || ""}`;
+function setControl(engine, key, value) {
+  prefs.controls ||= {};
+  const mine = { ...changedControls(engine) };
+  if (value == null || Math.abs(value - controlDefault(engine, key)) < 1e-9) delete mine[key]; else mine[key] = value;
+  if (Object.keys(mine).length) prefs.controls[engine] = mine; else delete prefs.controls[engine];
+}
+const sliderPct = (key, v) => `${((v - CONTROL[key].min) / (CONTROL[key].max - CONTROL[key].min)) * 100}%`;
+function controlCard(key) {
+  const c = CONTROL[key], e = state.engine, v = controlValue(e, key), changed = key in changedControls(e);
+  return `<div class="ctl" data-ctl="${key}">
+    <div class="ctl-top">${icon16(c.icon)}<b id="ctl-${key}">${c.label}</b>
+      ${changed ? `<button class="ctl-reset" data-reset="${key}" title="Back to ${fmtControl(key, controlDefault(e, key))}">Reset</button>` : ""}
+      <span class="ctl-val ${changed ? "" : "def"}">${fmtControl(key, v)}</span></div>
+    <input class="slider" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${v}" aria-labelledby="ctl-${key}" style="--pct:${sliderPct(key, v)}">
+    <p>${c.hint}</p></div>`;
+}
+function renderControls() {
+  const e = ENGINES[state.engine], changed = Object.keys(changedControls(state.engine)).length;
+  $("#controlsBtn .dot").hidden = !changed;
+  if (!$("#controls").classList.contains("open")) return;
+  const own = ownControls(state.engine);
+  $("#controlsFor").textContent = `${e.full} · saved for this engine`;
+  $("#controlsReset").disabled = !changed;
+  $("#controlsBody").innerHTML = controlCard("speed")
+    + (own.length ? `<p class="ctl-group">${e.name} sampling</p>` + own.map(controlCard).join("") : `<p class="ctl-none">${e.name} has no other settings to tweak yet.</p>`)
+    + `<p class="ctl-group">Every engine</p><div class="ctl"><div class="ctl-top">${icon16("dice")}<b>Seed</b></div>
+      <div class="row"><input class="num" id="seed" value="${state.seed}" inputmode="numeric" aria-label="Seed"><button class="btn small" id="reseed">New seed</button></div>
+      <p>The same seed and text give the same take. A new seed gives a different reading of the same line. Saved with a voice's defaults.</p></div>`;
+  $("#seed").oninput = ev => { state.seed = parseInt(ev.target.value, 10) || 0; renderDetail(); };
+  $("#reseed").onclick = () => { state.seed = Math.floor(Math.random() * 99999); $("#seed").value = state.seed; renderDetail(); };
+}
+$("#controlsBody").addEventListener("input", e => {
+  const card = e.target.closest("[data-ctl]"); if (!card || !e.target.matches(".slider")) return;
+  const key = card.dataset.ctl, v = parseFloat(e.target.value);
+  setControl(state.engine, key, v);
+  e.target.style.setProperty("--pct", sliderPct(key, v));
+  const val = card.querySelector(".ctl-val");
+  val.textContent = fmtControl(key, v); val.classList.toggle("def", !(key in changedControls(state.engine)));
+});
+// Saving and the Reset links wait until the slider is let go, so dragging doesn't rebuild the card under the pointer.
+$("#controlsBody").addEventListener("change", e => {
+  if (!e.target.matches(".slider")) return;
+  const key = e.target.closest("[data-ctl]").dataset.ctl;
+  persistPrefs(); renderControls();
+  $(`[data-ctl="${key}"] .slider`)?.focus({ preventScroll: true }); // arrow keys keep working after the rebuild
+});
+$("#controlsBody").addEventListener("click", e => {
+  const r = e.target.closest("[data-reset]"); if (!r) return;
+  setControl(state.engine, r.dataset.reset, null); persistPrefs(); renderControls();
+});
+$("#controlsReset").onclick = () => { delete prefs.controls?.[state.engine]; persistPrefs(); renderControls(); log(`${ENGINES[state.engine].name} is back to its default controls.`); };
+function openControls() {
+  closeMenu();
+  const d = $("#controls"); d.classList.add("open"); d.inert = false;
+  $("#controlsBtn").setAttribute("aria-expanded", "true");
+  renderControls();
+  d.querySelector(".slider")?.focus({ preventScroll: true });
+}
+function closeControls() {
+  const d = $("#controls"); if (!d.classList.contains("open")) return;
+  d.classList.remove("open"); d.inert = true;
+  $("#controlsBtn").setAttribute("aria-expanded", "false");
+}
+const toggleControls = () => ($("#controls").classList.contains("open") ? closeControls() : openControls());
+
 // ---------- takes ----------
-const takeLabel = t => (state.blind && t.group ? `Take ${String.fromCharCode(65 + t.groupIndex)}` : `Take ${t.n}`);
+const takeLabel =t => (state.blind && t.group ? `Take ${String.fromCharCode(65 + t.groupIndex)}` : `Take ${t.n}`);
 function fileStem(t) {
   const v = voiceById(t.voice)?.name || "voice", e = ENGINES[t.engine].name;
   const date = new Date().toISOString().slice(0, 10);
@@ -594,7 +719,7 @@ async function generate(engine, opts = {}) {
   if (blocker(engine)) return;
   const v = voiceById(opts.voice) || currentVoice();
   const design = engine === "breeze" && state.breezeMode === "Design";
-  state.busy = true; state.cancelling = false; renderPreflight();
+  state.busy = true; state.cancelling = false; renderPreflight(); logoBusy(true);
   const t = { id: `t${Date.now()}${Math.random()}`, n: state.nextN++, engine, voice: v.id, pending: true, design, saved: null,
               text: opts.text || scriptText(engine), shown: opts.shown || neutralText(), group: opts.group, groupIndex: opts.groupIndex };
   takes.push(t); state.take = t.id; renderTakes();
@@ -602,7 +727,7 @@ async function generate(engine, opts = {}) {
   const t0 = performance.now();
   const timer = setInterval(() => { const el = document.querySelector(`.take[data-id="${t.id}"] [data-elapsed]`); if (el) el.textContent = `${((performance.now() - t0) / 1000).toFixed(0)} s`; }, 250);
   try {
-    const r = await invoke("generate", { req: { engine, profileId: v.id, text: t.text, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, instruction: $("#instr").value.trim(), seed: state.seed } });
+    const r = await invoke("generate", { req: { engine, profileId: v.id, text: t.text, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, instruction: $("#instr").value.trim(), seed: state.seed, controls: sentControls(engine) } });
     Object.assign(t, { pending: false, path: r.path, seconds: r.seconds, elapsed: r.elapsed });
     log(`${takeLabel(t)} is ready (${r.seconds.toFixed(1)} s of audio in ${r.elapsed.toFixed(1)} s). Ctrl S saves it.`);
     renderTakes(t.id);
@@ -614,7 +739,7 @@ async function generate(engine, opts = {}) {
     renderTakes();
     return false;
   } finally {
-    clearInterval(timer); state.busy = false; state.cancelling = false; renderPreflight();
+    clearInterval(timer); state.busy = false; state.cancelling = false; renderPreflight(); logoBusy(false);
   }
 }
 async function compareAll() {
@@ -830,7 +955,10 @@ function renderSettings() {
     section("Recording and transcripts",
       row("Microphone", "", SET.sel("mic", [["", "Windows default"], ...devices.in])) +
       row("Speech-to-text model", "Bigger is more accurate, smaller is faster. Runs on the CPU.", SET.sel("stt", pairs(["Automatic", "tiny", "base", "small", "medium"]))) +
-      row("Transcript language", "", SET.sel("lang", [["English", "English"], ["Auto", "Detect automatically"]])));
+      row("Transcript language", "", SET.sel("lang", [["English", "English"], ["Auto", "Detect automatically"]]))) +
+    section("About",
+      row(`Mimic ${escapeHtml(version)}`, update ? `Version ${escapeHtml(update.version)} is available.` : "Mimic checks GitHub for a new version each time it starts.",
+        update ? `<button class="btn small" data-update="open">Install ${escapeHtml(update.version)}</button>` : `<button class="btn small" data-update="check">Check for updates</button>`));
 }
 async function openSettings() { await loadDevices(); renderSettings(); $("#settingsDlg").classList.add("open"); }
 function closeSettings() { $("#settingsDlg").classList.remove("open"); }
@@ -841,6 +969,13 @@ $("#settingsBody").addEventListener("click", async e => {
   const ch = e.target.closest("[data-change]");
   if (ch) { const p = await invoke("pick_folder", { title: ch.dataset.title }); if (p) { prefs[ch.dataset.change] = p; afterPref(ch.dataset.change); } return; }
   const op = e.target.closest("[data-open]"); if (op) { closeSettings(); op.dataset.open === "palette" ? openPalette() : openEngines(); }
+  const up = e.target.closest("[data-update]");
+  if (up) {
+    if (up.dataset.update === "open") { closeSettings(); return openUpdate(); }
+    up.disabled = true; up.textContent = "Checking…";
+    await checkUpdate(true);
+    if (update) { closeSettings(); openUpdate(); } else { renderSettings(); log("Mimic is up to date."); }
+  }
 });
 $("#settingsBody").addEventListener("change", e => {
   const t = e.target.closest("[data-pref-text]");
@@ -867,8 +1002,11 @@ const COMMANDS = () => [
   { label: "Compare engines", key: "", run: compareAll },
   ...ALL.filter(usable).map(id => ({ label: `Switch to ${ENGINES[id].name}`, key: "", run: () => selectEngine(id) })),
   { label: "Unload engine (free memory)", key: "", run: () => invoke("unload") },
+  { label: "New voice", key: "", run: openNewVoice },
   { label: "Record a voice", key: "", run: openRecorder },
-  { label: "Import a clip", key: "", run: importClip },
+  { label: "Import a clip", key: "", run: () => importClip() },
+  { label: "Controls (speed, sampling, seed)", key: "", run: openControls },
+  { label: "Check for updates", key: "", run: () => checkUpdate(false) },
   { label: "Engines", key: "", run: openEngines },
   { label: state.blind ? "Show engine names" : "Blind comparison", key: "B", run: toggleBlind },
   { label: "Switch theme", key: "", run: toggleTheme },
@@ -894,13 +1032,20 @@ $("#compareBtn").onclick = compareAll;
 $("#blindBtn").onclick = toggleBlind;
 $("#settingsBtn").onclick = openSettings;
 $("#settingsClose").onclick = closeSettings;
-$("#recordBtn").onclick = openRecorder;
-$("#importBtn").onclick = importClip;
+$("#newVoiceBtn").onclick = openNewVoice;
+$("#nvRecord").onclick = () => { closeNewVoice(); openRecorder(); };
+$("#nvImport").onclick = () => { closeNewVoice(); importClip(); };
+$("#nvCancel").onclick = closeNewVoice;
+$("#controlsBtn").onclick = toggleControls;
+$("#controlsClose").onclick = closeControls;
+$("#updateBtn").onclick = openUpdate;
+$("#upLater").onclick = closeUpdate;
+$("#upInstall").onclick = installUpdate;
 $("#recToggle").onclick = toggleRecord;
 $("#recCancel").onclick = closeRecorder;
 $("#paletteInput").oninput = () => { palIndex = 0; renderPalette(); };
 $("#paletteList").onclick = e => { const li = e.target.closest("li[data-i]"); if (li) runPalette(+li.dataset.i); };
-for (const [id, close] of [["palette", closePalette], ["recorder", closeRecorder], ["enginesDlg", closeEngines], ["settingsDlg", closeSettings]])
+for (const [id, close] of [["palette", closePalette], ["recorder", closeRecorder], ["enginesDlg", closeEngines], ["settingsDlg", closeSettings], ["newVoiceDlg", closeNewVoice], ["updateDlg", closeUpdate]])
   $("#" + id).onclick = e => { if (e.target.id === id) close(); };
 
 document.addEventListener("keydown", e => {
@@ -918,12 +1063,15 @@ document.addEventListener("keydown", e => {
     return;
   }
   if ($("#recorder").classList.contains("open")) { if (e.key === "Escape") closeRecorder(); return; }
+  if ($("#newVoiceDlg").classList.contains("open")) { if (e.key === "Escape") closeNewVoice(); return; }
+  if ($("#updateDlg").classList.contains("open")) { if (e.key === "Escape") closeUpdate(); return; }
   if ($("#enginesDlg").classList.contains("open")) { if (e.key === "Escape") closeEngines(); return; }
   if (e.ctrlKey && e.key === ",") { e.preventDefault(); openSettings(); return; }
   if ($("#settingsDlg").classList.contains("open")) { if (e.key === "Escape") closeSettings(); return; }
   if (e.ctrlKey && key === "s") { e.preventDefault(); saveTake(takes.find(x => x.id === state.take), e.shiftKey); return; }
   if (e.ctrlKey && e.key === "Enter") { e.preventDefault(); trace(`Ctrl+Enter (repeat ${e.repeat})`); generate(state.engine); return; }
-  if (e.key === "Escape") { if (state.busy) cancel(); else stopAudio(); if (typing) e.target.blur(); return; }
+  if (e.key === "Escape" && $("#controls").contains(e.target)) { closeControls(); $("#controlsBtn").focus(); return; }
+  if (e.key === "Escape") { if (state.busy) cancel(); else if ($("#controls").classList.contains("open")) closeControls(); else stopAudio(); if (typing) e.target.blur(); return; }
   if (typing) return;
   const vis = visibleTakes(), i = vis.findIndex(t => t.id === state.take);
   if (e.key === " ") { e.preventDefault(); const t = takes.find(x => x.id === state.take); if (t && !t.pending) togglePlay(t); }
@@ -953,6 +1101,88 @@ listen("hardware", ({ payload }) => {
 listen("log", ({ payload }) => log(payload));
 listen("caelestia", ({ payload }) => { caelestia = payload; if (prefs.theme === "Caelestia") applyTheme(); });
 
+// ---------- logo: the M talks now and then, and keeps talking while a take is made ----------
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+const talk = () => { if (!calm.matches) $("#logoMark").classList.add("talk"); };
+// The loop repeats while a take is being made and stops at the end of a loop, where the bars spell M again.
+$("#logoMark").addEventListener("animationiteration", e => {
+  if (e.target === $("#logoMark").firstElementChild && !state.busy) $("#logoMark").classList.remove("talk");
+});
+const logoBusy = on => on && talk();
+(function idleTalk() { setTimeout(() => { if (!document.hidden) talk(); idleTalk(); }, 25000 + Math.random() * 20000); })();
+
+// ---------- startup splash ----------
+const shownAt = performance.now();
+function hideSplash() {
+  const s = $("#splash"); if (!s) return;
+  setTimeout(() => {
+    s.classList.add("out");
+    s.addEventListener("transitionend", () => s.remove(), { once: true });
+    setTimeout(() => s.remove(), 600); // in case the transition never runs
+  }, Math.max(0, 1100 - (performance.now() - shownAt)));
+}
+
+// ---------- updates ----------
+let update = null; // { version, current, notes } when a newer release exists
+function notesHtml(md) {
+  // Release notes are Markdown; headings and bullet lists are enough here.
+  let html = "", list = false;
+  for (const line of md.split("\n")) {
+    const bullet = /^\s*[-*]\s+(.*)/.exec(line), head = /^#{1,6}\s+(.*)/.exec(line);
+    if (list && !bullet) { html += "</ul>"; list = false; }
+    if (bullet) { if (!list) { html += "<ul>"; list = true; } html += `<li>${escapeHtml(bullet[1])}</li>`; }
+    else if (head) html += `<h5>${escapeHtml(head[1])}</h5>`;
+    else if (line.trim()) html += `<p>${escapeHtml(line)}</p>`;
+  }
+  return html + (list ? "</ul>" : "");
+}
+async function checkUpdate(quiet) {
+  try { update = await invoke("check_update"); }
+  catch (e) { if (!quiet) log(String(e), true); return; }
+  $("#updateBtn").hidden = !update;
+  if (update) {
+    $("#updateBtn").textContent = `Update to ${update.version}`;
+    if (!quiet) openUpdate();
+  } else if (!quiet) log("Mimic is up to date.");
+}
+function openUpdate() {
+  if (!update) return;
+  const unsaved = takes.filter(t => !t.pending && !t.saved).length;
+  const pm = update.packageManager; // e.g. "pacman": that package manager updates Mimic, not Mimic itself
+  $("#upTitle").textContent = pm ? `Mimic ${update.version} is out` : `Mimic ${update.version} is ready to install`;
+  $("#upCurrent").textContent = pm
+    ? `You have ${update.current}, installed with ${pm}. Update it the same way: set pkgver=${update.version} in packaging/arch/PKGBUILD, then run makepkg -si there.`
+    : `You have ${update.current}. Mimic downloads the new version, installs it and opens again.`;
+  $("#upInstall").hidden = !!pm;
+  $("#upLater").textContent = pm ? "Close" : "Later";
+  $("#upNotes").innerHTML = notesHtml(update.notes || "");
+  $("#upWarn").hidden = !unsaved || !!pm;
+  $("#upWarn").textContent = `${unsaved} unsaved take${unsaved === 1 ? " is" : "s are"} cleared when Mimic restarts. Save ${unsaved === 1 ? "it" : "them"} first if you want to keep ${unsaved === 1 ? "it" : "them"}.`;
+  $("#upStatus").textContent = ""; $(".up-progress").hidden = true;
+  $("#upInstall").disabled = false; $("#upLater").disabled = false;
+  $("#updateDlg").classList.add("open");
+  (pm ? $("#upLater") : $("#upInstall")).focus();
+}
+function closeUpdate() { if (!$("#upInstall").disabled) $("#updateDlg").classList.remove("open"); }
+async function installUpdate() {
+  $("#upInstall").disabled = true; $("#upLater").disabled = true;
+  $(".up-progress").hidden = false; $("#upBar").style.transform = "scaleX(0)";
+  $("#upStatus").textContent = "Downloading…";
+  trace(`installing update ${update.version}`);
+  try {
+    await invoke("install_update"); // restarts Mimic when it's done
+    $("#upStatus").textContent = "Restarting…";
+  } catch (e) {
+    $("#upStatus").textContent = String(e);
+    $("#upInstall").disabled = false; $("#upLater").disabled = false;
+  }
+}
+listen("update-progress", ({ payload }) => {
+  if (!payload.total) { $("#upStatus").textContent = `Downloading… ${(payload.done / 1e6).toFixed(1)} MB`; return; }
+  $("#upBar").style.transform = `scaleX(${payload.done / payload.total})`;
+  $("#upStatus").textContent = payload.done >= payload.total ? "Installing…" : `Downloading… ${Math.round(payload.done / payload.total * 100)}%`;
+});
+
 // Ask before closing with unsaved takes.
 window.__TAURI__.window.getCurrentWindow().onCloseRequested(e => {
   const unsaved = takes.filter(t => !t.pending && !t.saved).length;
@@ -960,8 +1190,10 @@ window.__TAURI__.window.getCurrentWindow().onCloseRequested(e => {
 });
 
 // ---------- start ----------
+let version = "";
 async function start() {
   const b = await invoke("bootstrap");
+  version = await window.__TAURI__.app.getVersion();
   prefs = b.settings; profiles = b.profiles; installed = b.installed; hw = b.hardware;
   managed = b.managed || {}; device = b.device || "cpu"; platform = b.platform || "windows"; caelestia = b.caelestia || null;
   if (b.resident) { state.resident = b.resident; state.engineState[b.resident] = "warm"; }
@@ -970,7 +1202,8 @@ async function start() {
   if (d) Object.assign(state, { kittenStyle: d.kittenStyle, breezeMode: d.breezeMode, seed: d.seed, engine: usable(d.engine) ? d.engine : state.engine });
   if (!usable(state.engine)) state.engine = ALL.find(usable) || "kitten";
   applyTheme(); applyOutput();
-  renderTop(); renderComposer(); renderDialect(); renderCount(); renderPreflight(); renderTakes();
+  renderTop(); renderComposer(); renderDialect(); renderCount(); renderPreflight(); renderTakes(); renderControls();
+  hideSplash();
   // Clips that were mid-transcription when Mimic last closed get another go.
   profiles.filter(p => p.tx === "transcribing").forEach(transcribe);
   const ready = ALL.filter(usable).map(id => ENGINES[id].name);
@@ -1000,9 +1233,18 @@ async function selfTest(script) {
     else if (cmd === "compare") { await compareAll(); trace(`test: compare -> ${takes.length} takes`); }
     else if (cmd === "save") await saveTake(takes.find(x => x.id === state.take), false);
     else if (cmd === "engines") openEngines();
+    else if (cmd === "mode") { state[MODES[state.engine].key] = arg; renderComposer(); renderPreflight(); renderControls(); }
+    else if (cmd === "instr") { $("#instr").value = arg; renderPreflight(); }
+    else if (cmd === "newvoice") openNewVoice();
+    else if (cmd === "controls") openControls();
+    else if (cmd === "control") { const [k, v] = arg.split("="); setControl(state.engine, k, v === "" ? null : parseFloat(v)); persistPrefs(); renderControls(); }
+    else if (cmd === "update" || cmd === "update-pacman") { update = { version: "9.9.9", current: version, notes: (arg || "").replaceAll("|", "\n"), packageManager: cmd === "update-pacman" ? "pacman" : null }; $("#updateBtn").hidden = false; $("#updateBtn").textContent = "Update to 9.9.9"; openUpdate(); } // debug builds never see a real one
     else if (cmd === "settings") await openSettings();
     else if (cmd === "wait") await new Promise(r => setTimeout(r, +arg || 1000));
   }
   trace("test: done");
 }
-start().then(async () => { const s = await invoke("test_script"); if (s) selfTest(s); }).catch(e => log(`Mimic couldn't start: ${e}`, true));
+start().then(async () => {
+  const s = await invoke("test_script");
+  if (s) selfTest(s); else checkUpdate(true);
+}).catch(e => { hideSplash(); log(`Mimic couldn't start: ${e}`, true); });

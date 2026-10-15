@@ -52,6 +52,16 @@ pub fn ffmpeg(src: &Path, args: &[&str], dst: &Path) -> Result<(), String> {
     }
 }
 
+/// Speed a take up or slow it down in place without changing its pitch. 1.0 leaves the file alone.
+pub fn set_speed(path: &Path, speed: f64) -> Result<(), String> {
+    if (speed - 1.0).abs() < 0.005 {
+        return Ok(());
+    }
+    let tmp = path.with_extension("speed.wav");
+    ffmpeg(path, &["-filter:a", &format!("atempo={:.2}", speed.clamp(0.5, 2.0))], &tmp)?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("can't write the take: {e}"))
+}
+
 /// Any audio file -> mono 24 kHz 16-bit WAV, the format every engine accepts.
 pub fn to_reference_wav(src: &Path, dst: &Path) -> Result<(), String> {
     ffmpeg(src, &["-ac", "1", "-ar", "24000", "-sample_fmt", "s16"], dst)

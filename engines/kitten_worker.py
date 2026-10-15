@@ -1,6 +1,7 @@
 """KittenTTS 2 worker for Mimic. Run with kitten-env python (-X utf8). Speaks JSON lines on stdin/stdout.
 
-Request:  {"text", "output", "reference"? | "voice"?, "expressive"?, "seed"?}
+Request:  {"text", "output", "reference"? | "voice"?, "expressive"?, "seed"?, "controls"?}
+          controls: temperature, top_p, top_k, repetition_penalty, gap (seconds between sentences); unset keeps the preset.
 Events:   {"event": "ready", "voices": [...]} once, then {"event": "done", ...} or {"event": "error", ...} per request.
 """
 import json
@@ -55,11 +56,19 @@ for line in sys.stdin:
         kwargs = {"reference": request["reference"]} if request.get("reference") else {"voice": request.get("voice") or "Bruno"}
         if request.get("expressive"):
             kwargs["preset"] = "expressive"
+        controls = request.get("controls") or {}
+        for key in ("temperature", "top_p"):
+            if key in controls:
+                kwargs[key] = float(controls[key])
+        if "top_k" in controls:
+            kwargs["top_k"] = int(controls["top_k"])
+        if "repetition_penalty" in controls:
+            kwargs["advanced"] = {"repetition_penalty": float(controls["repetition_penalty"])}
         if request.get("seed") is not None:
             seed_everything(int(request["seed"]))
         started = time.time()
         # Kitten stops after the first sentence or two, so each sentence is generated on its own and joined.
-        gap = numpy.zeros(int(GAP_SECONDS * model.sample_rate), dtype=numpy.float32)
+        gap = numpy.zeros(int(float(controls.get("gap", GAP_SECONDS)) * model.sample_rate), dtype=numpy.float32)
         pieces = []
         for sentence in sentences(request["text"]):
             if pieces:

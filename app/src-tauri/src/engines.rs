@@ -7,6 +7,7 @@ use crate::store::Profile;
 use crate::worker::Worker;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,6 +75,9 @@ pub struct GenRequest {
     pub instruction: String,
     #[serde(default)]
     pub seed: i64,
+    /// Controls panel values the user changed. "speed" is applied here; the rest go to the engine.
+    #[serde(default)]
+    pub controls: BTreeMap<String, f64>,
 }
 
 #[derive(Serialize)]
@@ -202,7 +206,7 @@ impl Manager {
             let out_s = out.to_string_lossy().to_string();
             let res = match &mut slot.as_mut().unwrap().1 {
                 Resident::Py(w) => {
-                    let request = match req.engine.as_str() {
+                    let mut request = match req.engine.as_str() {
                         "kitten" => {
                             let mut r = json!({ "text": req.text, "output": out_s, "seed": req.seed,
                                                 "expressive": req.kitten_style == "Expressive" });
@@ -221,10 +225,13 @@ impl Manager {
                         _ => json!({ "text": req.text, "output": out_s, "seed": req.seed, "language": "English",
                                      "ref_audio": profile.clip, "ref_text": profile.transcript }),
                     };
+                    let sampling: BTreeMap<_, _> = req.controls.iter().filter(|(k, _)| k.as_str() != "speed").collect();
+                    request["controls"] = json!(sampling);
                     w.request(&request, GEN_TIMEOUT).map(|_| ())
                 }
                 Resident::Fish(s) => s.generate(&req.text, Some((clip, profile.transcript.as_str())), &out),
             };
+            let res = res.and_then(|()| audio::set_speed(&out, req.controls.get("speed").copied().unwrap_or(1.0)));
             match res {
                 Ok(()) => {
                     emit(app, &req.engine, "warm");

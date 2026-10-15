@@ -1,7 +1,7 @@
 """NeuTTS Air worker for Mimic: voice cloning on the CPU in about 1 GB of RAM (quantized GGUF via llama.cpp).
 Run with neutts-env python (-X utf8). Speaks JSON lines on stdin/stdout.
 
-Request: {"text", "output", "ref_audio", "ref_text", "seed"?}. The reference clip should be 3-15 s.
+Request: {"text", "output", "ref_audio", "ref_text", "seed"?, "controls"?}. controls: gap (seconds between sentences). The reference clip should be 3-15 s.
 """
 import json
 import os
@@ -43,7 +43,7 @@ for line in sys.stdin:
         if r.get("seed") is not None:
             np.random.seed(int(r["seed"]) % 2**32)
         started = time.time()
-        gap = np.zeros(int(GAP_SECONDS * RATE), dtype=np.float32)
+        gap = np.zeros(int(float((r.get("controls") or {}).get("gap", GAP_SECONDS)) * RATE), dtype=np.float32)
         pieces = []
         for sentence in sentences(r["text"]):  # short inputs keep the small model on track
             if pieces:

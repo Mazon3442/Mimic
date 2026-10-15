@@ -193,6 +193,8 @@ npx @tauri-apps/cli@2 build              # Windows installer in target/release/b
 npx @tauri-apps/cli@2 build --bundles deb,rpm,appimage   # Linux packages
 ```
 
+Releases come from GitHub Actions: push an annotated tag such as `v1.2.0` and `.github/workflows/release.yml` builds the Windows installer and the Linux `.deb`, `.rpm` and AppImage, signs them and publishes one release with a `latest.json`. Installed copies check that file on start and offer the update (Settings › About too). Signing needs the repository secret `TAURI_SIGNING_PRIVATE_KEY`, the private half of the `pubkey` in `tauri.conf.json`. Arch builds from the PKGBUILD are told about new versions but update through `makepkg`.
+
 <details>
 <summary><b>Repository layout</b></summary>
 

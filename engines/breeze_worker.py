@@ -1,8 +1,10 @@
 """Breeze TTS 2 worker for Mimic. Run with breeze-env python (-X utf8). Speaks JSON lines on stdin/stdout.
 
 Mirrors breeze-tts/infer.py, but loads the model once and serves many requests.
-Request: {"text", "output", "instruction"?, "ref_audio"?, "ref_text"?, "cfg"?, "seed"?}
+Request: {"text", "output", "instruction"?, "ref_audio"?, "ref_text"?, "seed"?, "controls"?}
+controls: cfg, temperature, top_p, top_k, repetition_penalty; unset keeps the defaults below.
 """
+import dataclasses
 import json
 import math
 import os
@@ -34,12 +36,8 @@ def send(**message):
 
 tokenizer, model, audio_tokenizer = load_runtime(MODEL, device=resolve_device(), attn_implementation="eager")
 update_generation_config_for_breeze(model)
-runtime = FastBreezeStreamingRuntime(
-    model,
-    audio_tokenizer,
-    FastStreamingConfig(max_new_tokens=1500, max_seq_len=2048, repetition_penalty=1.1),
-    tokenizer=tokenizer,
-)
+BASE = FastStreamingConfig(max_new_tokens=1500, max_seq_len=2048, repetition_penalty=1.1)
+runtime = FastBreezeStreamingRuntime(model, audio_tokenizer, BASE, tokenizer=tokenizer)
 send(event="ready")
 
 for line in sys.stdin:
@@ -55,7 +53,8 @@ for line in sys.stdin:
             raise ValueError("reference audio and reference text must be given together")
         if ref_audio and not Path(ref_audio).is_file():
             raise FileNotFoundError(f"Reference audio not found: {ref_audio}")
-        cfg = float(r["cfg"]) if r.get("cfg") else (4.0 if instruction else 1.0)
+        controls = r.get("controls") or {}
+        cfg = float(controls["cfg"]) if controls.get("cfg") else (4.0 if instruction else 1.0)
         if not math.isfinite(cfg) or cfg <= 0:
             raise ValueError("cfg scale must be greater than 0")
         seed = int(r.get("seed") or 42)
@@ -66,6 +65,12 @@ for line in sys.stdin:
         if ref_audio:
             request["ref_audio_path"] = ref_audio
             request["ref_text"] = ref_text
+
+        # Sampling is read from the runtime's config on every step, so swapping it per request is enough.
+        sampling = {k: float(controls[k]) for k in ("temperature", "top_p", "repetition_penalty") if k in controls}
+        if "top_k" in controls:
+            sampling["top_k"] = int(controls["top_k"])
+        runtime.config = dataclasses.replace(BASE, **sampling)
 
         started = time.time()
         set_all_seeds(seed)
