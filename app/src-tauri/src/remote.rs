@@ -247,7 +247,7 @@ fn run(cmd: &mut Command, limit: Duration) -> Result<String, String> {
 
 /// Puts this PC's port behind Tailscale's HTTPS, and returns its address on the tailnet.
 fn tailscale_serve(port: u16) -> Result<String, String> {
-    let ts = tailscale().ok_or("Tailscale isn't installed. Get it from tailscale.com/download, sign in on this PC and on your other device, then try again.")?;
+    let ts = tailscale().ok_or("Tailscale isn't installed on this PC. https://tailscale.com/download Then sign in on this PC and on your other device with the same account, and press Anywhere (Tailscale) again.")?;
     let status: Value = serde_json::from_str(&run(Command::new(&ts).args(["status", "--json"]), Duration::from_secs(10)).unwrap_or_default()).unwrap_or_default();
     if status["BackendState"].as_str() != Some("Running") {
         return Err("Tailscale isn't connected. Open Tailscale and sign in, then try again.".into());
@@ -260,7 +260,7 @@ fn tailscale_serve(port: u16) -> Result<String, String> {
     run(Command::new(&ts).args(["serve", "--bg", "--https=443", &target]), Duration::from_secs(20)).map_err(|out| {
         let link = out.split_whitespace().find(|w| w.starts_with("https://login.tailscale.com")).map(String::from);
         if let Some(link) = link {
-            format!("Tailscale needs HTTPS turned on for your tailnet first. Open {link} , turn it on, then try again.")
+            format!("Tailscale needs HTTPS turned on for your devices first (once). {link} Then press Anywhere (Tailscale) again.")
         } else if out.contains("Access denied") || out.contains("permission") {
             "Tailscale won't let Mimic set up sharing. Run: sudo tailscale set --operator=$USER, then try again.".into()
         } else {

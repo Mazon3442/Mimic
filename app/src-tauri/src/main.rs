@@ -459,6 +459,21 @@ fn remote_new_link(handle: AppHandle) -> Result<Value, String> {
     remote::new_link(&handle)
 }
 
+/// Opens one of Tailscale's pages (download, turning on HTTPS) in the browser, for the sharing setup guide.
+/// Only Tailscale's sites, so the window can't be made to open anything else.
+#[tauri::command]
+fn open_tailscale_page(url: String) -> Result<(), String> {
+    let allowed = ["https://tailscale.com/", "https://login.tailscale.com/"].iter().any(|p| url.starts_with(p));
+    if !allowed || url.chars().any(|c| c.is_whitespace() || c == '"') {
+        return Err("Mimic only opens Tailscale's own pages.".into());
+    }
+    #[cfg(windows)]
+    let opened = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", &url]).spawn();
+    #[cfg(unix)]
+    let opened = std::process::Command::new("xdg-open").arg(&url).spawn();
+    opened.map(|_| ()).map_err(|e| format!("couldn't open the browser: {e}"))
+}
+
 /// Runs a UI command for a browser on another device. Commands that open windows on this PC or take its file
 /// paths aren't offered; remote.rs has browser versions of those (upload, download).
 fn remote_call(h: &AppHandle, cmd: &str, args: Value) -> Result<Value, String> {
@@ -729,7 +744,7 @@ fn main() {
             bootstrap, save_settings, save_profile, delete_profile, import_clip, save_recording, transcribe,
             peaks, generate, cancel, unload, preload, save_take, save_take_as, delete_take, pick_folder, reveal, ui_error,
             install_engine, remove_engine, test_script, import_path, check_update, install_update,
-            remote_status, remote_start, remote_stop, remote_new_link
+            remote_status, remote_start, remote_stop, remote_new_link, open_tailscale_page
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mimic")

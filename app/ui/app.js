@@ -663,6 +663,7 @@ function fileStem(t) {
   return { "date-voice-take": `${date} ${v} take ${t.n}`, take: `Take ${t.n}` }[prefs.names] || `${v} - ${e} - take ${t.n}`;
 }
 function renderTakes(revealId) {
+  if (revealId && document.body.dataset.tab !== "takes" && phone.matches) $(".tab-dot").hidden = false;
   const list = $("#takeList");
   list.innerHTML = "";
   const unsaved = takes.filter(t => !t.pending && !t.saved).length;
@@ -780,6 +781,7 @@ audio.onended = () => { player.key = null; renderTakes(); };
 // ---------- generation ----------
 async function generate(engine, opts = {}) {
   if (blocker(engine)) return;
+  showTab("takes"); // on a phone, follow the take as it's made
   const v = voiceById(opts.voice) || currentVoice();
   const design = engine === "breeze" && state.breezeMode === "Design";
   state.busy = true; state.cancelling = false; renderPreflight(); logoBusy(true);
@@ -792,7 +794,7 @@ async function generate(engine, opts = {}) {
   try {
     const r = await invoke("generate", { req: { engine, profileId: v.id, text: t.text, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, instruction: $("#instr").value.trim(), seed: state.seed, controls: sentControls(engine) } });
     Object.assign(t, { pending: false, path: r.path, seconds: r.seconds, elapsed: r.elapsed });
-    log(`${takeLabel(t)} is ready (${r.seconds.toFixed(1)} s of audio in ${r.elapsed.toFixed(1)} s). Ctrl S saves it.`);
+    log(`${takeLabel(t)} is ready (${r.seconds.toFixed(1)} s of audio in ${r.elapsed.toFixed(1)} s).${matchMedia("(pointer: coarse)").matches ? "" : " Ctrl S saves it."}`);
     renderTakes(t.id);
     if (prefs.autoplay) playPath(t.path, t.id);
     return true;
@@ -1075,13 +1077,29 @@ function shareSection() {
     return section("Use from another device",
       row("Share this PC's Mimic", "Open Mimic in a browser on a laptop or phone, with this PC's GPU doing the work. Nothing is shared until you start it, and it stops when Mimic closes.",
         `<button class="btn small" data-share="lan" ${share.busy ? "disabled" : ""}>This network</button><button class="btn small" data-share="tailscale" ${share.busy ? "disabled" : ""}>Anywhere (Tailscale)</button>`) +
-      `<p class="share-note">${share.busy ? escapeHtml(share.busy) : "<b>This network</b> works on the same Wi-Fi, but browsers only allow the microphone over HTTPS, so record on this PC. <b>Anywhere</b> needs Tailscale signed in on both devices and gives an HTTPS link, so recording works there too."}</p>`);
+      (share.error ? `<p class="share-error" role="alert">${withTailscaleLinks(share.error)}</p>`
+        : `<p class="share-note">${share.busy ? escapeHtml(share.busy) : "<b>This network</b> works on the same Wi-Fi, but browsers only allow the microphone over HTTPS, so record on this PC. <b>Anywhere</b> needs Tailscale signed in on both devices and gives an HTTPS link, so recording works there too."}</p>`) +
+      tailscaleGuide());
   }
   const where = share.mode === "lan" ? "on this network" : "through Tailscale";
   const who = share.devices === 1 ? "1 device is connected" : `${share.devices || "No"} devices are connected`;
   return section("Use from another device",
     row(`Sharing ${where}`, `${who}. Anyone with the link can use Mimic on this PC, so send it only to your own devices.`, `<button class="btn small" data-share="stop">Stop sharing</button>`) +
     `<div class="share-link"><input readonly value="${escapeHtml(share.url)}" aria-label="Link"><button class="btn small" data-share="copy">Copy</button><button class="btn small" data-share="new" title="The old link stops working">New link</button></div>`);
+}
+// Tailscale's pages in an error ("Get it from https://tailscale.com/download") become buttons that open the browser.
+const withTailscaleLinks = text => escapeHtml(text).replace(/https:\/\/(login\.)?tailscale\.com\/[^\s"<]*[^\s"<.,]/g,
+  url => `<button class="link" data-url="${url}">${url.includes("download") ? "Download Tailscale" : "Turn on HTTPS"}</button>`);
+// The button doesn't install Tailscale or sign anyone in (that needs an administrator and an account); it only
+// gives Mimic an HTTPS address on the tailnet. This says what to do first. Open when Tailscale is the problem.
+function tailscaleGuide() {
+  const open = share.error && share.errorMode === "tailscale" ? "open" : "";
+  return `<details class="share-help" ${open}><summary>How to set up Anywhere (Tailscale)</summary><ol>
+    <li><b>Install Tailscale</b> on this PC and on your laptop or phone. <button class="link" data-url="https://tailscale.com/download">Download Tailscale</button></li>
+    <li><b>Sign in with the same account</b> on both. Your devices can then reach each other from any network.</li>
+    ${platform === "linux" ? `<li><b>Let Mimic set up sharing</b> by running this once: <code>sudo tailscale set --operator=$USER</code></li>` : ""}
+    <li><b>Press Anywhere (Tailscale).</b> The first time, Tailscale asks you to turn on HTTPS for your devices; Mimic shows that link here.</li>
+  </ol><p>Mimic doesn't install Tailscale or sign you in. It only adds an HTTPS address for itself while sharing is on, and removes it when you stop.</p></details>`;
 }
 async function shareAction(act) {
   try {
@@ -1097,7 +1115,7 @@ async function shareAction(act) {
     if (act === "stop") { share = await invoke("remote_stop"); log("Stopped sharing."); }
     if (act === "new") { share = await invoke("remote_new_link"); log("Made a new link. The old one no longer works."); }
   } catch (e) {
-    share = await invoke("remote_status");
+    share = { ...(await invoke("remote_status")), error: String(e), errorMode: act };
     log(String(e), true);
   }
   renderSettings();
@@ -1117,6 +1135,7 @@ $("#settingsBody").addEventListener("click", async e => {
   if (ch) { const p = await invoke("pick_folder", { title: ch.dataset.title }); if (p) { prefs[ch.dataset.change] = p; afterPref(ch.dataset.change); } return; }
   const op = e.target.closest("[data-open]"); if (op) { closeSettings(); op.dataset.open === "palette" ? openPalette() : openEngines(); }
   const sh = e.target.closest("[data-share]"); if (sh) return shareAction(sh.dataset.share);
+  const url = e.target.closest("[data-url]"); if (url) return invoke("open_tailscale_page", { url: url.dataset.url }).catch(err => log(String(err), true));
   const up = e.target.closest("[data-update]");
   if (up) {
     if (up.dataset.update === "open") { closeSettings(); return openUpdate(); }
@@ -1231,6 +1250,19 @@ document.addEventListener("keydown", e => {
   else if (key === "b") toggleBlind();
 });
 addEventListener("resize", () => { renderVoices(); renderTakes(); });
+
+// ---------- phone layout: one panel at a time ----------
+const phone = matchMedia("(max-width: 959px)"); // phones and tablets in portrait; matches style.css
+function showTab(tab) {
+  if (!phone.matches) return;
+  document.body.dataset.tab = tab;
+  $$(".tabs [data-tab]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === tab));
+  if (tab === "takes") $(".tab-dot").hidden = true;
+  if (tab === "voices") renderVoices(); // canvases drawn while hidden have no size
+  if (tab === "takes") renderTakes();
+}
+document.body.dataset.tab = "script";
+$$(".tabs [data-tab]").forEach(b => (b.onclick = () => showTab(b.dataset.tab)));
 
 // ---------- events from the core ----------
 listen("engine", ({ payload }) => {
