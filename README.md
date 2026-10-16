@@ -30,7 +30,7 @@
 | **Voice profiles** | Record a voice by reading a short passage, import a clip, or drop audio files onto the window. Each profile keeps its clip, transcript and favorite settings. |
 | **Automatic transcripts** | Clips are transcribed on your machine with faster-whisper, so engines that need the exact words get them without typing. |
 | **Nine engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Qwen3-TTS 0.6B and 1.7B, Chatterbox Turbo, VoxCPM2, Audio8 TTS Preview, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
-| **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an Intel Arc GPU (experimental) or the CPU. The bar at the top shows real VRAM or RAM use. |
+| **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an AMD Radeon GPU on Linux (ROCm, experimental), an Intel Arc GPU (experimental) or the CPU. If a driver or runtime is missing, it says which package to install for your distro. The bar at the top shows real VRAM or RAM use. |
 | **One engine in memory** | Switching engines unloads the old one first, and idle engines unload after a set time, so the GPU is free for everything else. |
 | **Nothing saved behind your back** | Takes stay in a temporary cache until you press Save (Ctrl+S) or Save as (Ctrl+Shift+S). WAV, FLAC or MP3. |
 | **Compare engines** | Generate the same line with every engine that fits, optionally blind, and keep the best take. |
@@ -107,7 +107,7 @@ Only clone voices you have permission to use.
 <div align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/charts/architecture-dark.svg">
-  <img alt="Diagram: the interface talks to a Rust core through Tauri commands; the core runs one Python worker per engine over JSON lines, and the Fish server over HTTP; models run on an NVIDIA GPU, an Intel Arc GPU or the CPU." src="docs/assets/charts/architecture-light.svg" width="760">
+  <img alt="Diagram: the interface talks to a Rust core through Tauri commands; the core runs one Python worker per engine over JSON lines, and the Fish server over HTTP; models run on an NVIDIA GPU, an AMD GPU (Linux), an Intel Arc GPU or the CPU." src="docs/assets/charts/architecture-light.svg" width="760">
 </picture>
 </div>
 
@@ -118,7 +118,12 @@ Each engine lives in its own Python environment, so their dependencies never col
 
 - **Caelestia:** when `~/.local/state/caelestia/scheme.json` exists, the Theme setting defaults to *Caelestia*, and Mimic re-colors itself when the scheme changes with your wallpaper.
 - **Hyprland:** the window has no GTK title bar, because Hyprland draws its own borders. Its window class is `mimic`, for window rules.
-- **Where models run:** Settings › Run engines on. *Automatic* picks CUDA on NVIDIA, XPU on Intel Arc-class graphics (Arc cards, Core Ultra), and the CPU otherwise. PyTorch doesn't support older Intel graphics (Iris Xe, UHD), so those laptops use the CPU.
+- **Where models run:** Settings › Run engines on. *Automatic* picks CUDA on NVIDIA, ROCm on AMD Radeon cards, XPU on Intel Arc-class graphics (Arc cards, Core Ultra), and the CPU otherwise. GPUs are found by PCI id from sysfs, so this works the same on any distro, with or without `lspci` or `nvidia-smi`.
+  - **AMD (experimental):** ROCm's PyTorch ships its own libraries, so the kernel's `amdgpu` driver is all you need, plus access to `/dev/kfd` (`sudo usermod -aG render,video $USER`, then log in again; Mimic tells you if it's missing). Cards ROCm doesn't list officially, like the RX 6600/6700, run in compatibility mode. Radeon integrated graphics (680M, 780M, 890M) run only when you choose *GPU*, because they share system RAM.
+  - **Intel Arc:** needs Intel's compute runtime (Level Zero). Mimic shows the package for Arch, Debian/Ubuntu or Fedora if it's missing.
+  - **NVIDIA:** needs NVIDIA's own driver; with nouveau, Mimic uses the CPU and says how to install it.
+  - **Not supported:** older Intel graphics (Iris Xe, UHD), because PyTorch doesn't support them, and most Radeon cards older than the RX 6000 series. Those PCs use the CPU.
+  - After changing the setting, **Settings › Engines** offers each downloaded engine's build for the new choice (*Get AMD GPU build*).
 - **Files:** engines and models live in `~/.local/share/mimic/engines`; profiles, clips and settings in `~/.local/share/com.mazon.mimic`.
 - **NVIDIA on Wayland:** Mimic sets `WEBKIT_DISABLE_DMABUF_RENDERER=1` by itself to avoid WebKitGTK's blank-window bug.
 

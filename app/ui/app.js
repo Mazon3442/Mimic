@@ -104,7 +104,7 @@ const ICON = {
 let prefs = {};
 let profiles = [];
 let installed = {};
-let managed = {}; // engines Mimic downloaded itself, so it may also remove them
+let managed = {}; // engines Mimic downloaded itself (so it may also remove them): the PyTorch build each has, or false
 let hw = { gpu: "", vramTotal: 0, vramUsed: 0, ramTotal: 0, ramUsed: 0 };
 let takes = [];
 const state = {
@@ -122,13 +122,13 @@ function log(msg, error = false) {
 }
 
 // ---------- fit and readiness ----------
-// Where models run, as decided by the core: "cuda" (NVIDIA), "xpu" (Intel GPU) or "cpu".
+// Where models run, as decided by the core: "cuda" (NVIDIA), "rocm" (AMD GPU), "xpu" (Intel GPU) or "cpu".
 let device = "cuda";
 let platform = "windows";
-const DEVICE_NAME = { cuda: "GPU", xpu: "Intel GPU", cpu: "CPU" };
-// Memory an engine needs where it will run: VRAM on NVIDIA, shared RAM on Intel GPUs, RAM on the CPU.
+const DEVICE_NAME = { cuda: "GPU", rocm: "AMD GPU", xpu: "Intel GPU", cpu: "CPU" };
+// Memory an engine needs where it will run: VRAM on a graphics card, shared RAM on integrated GPUs, RAM on the CPU.
 const memFor = id => (device === "cpu" || ENGINES[id].cpuOnly ? ENGINES[id].cpuGb : ENGINES[id].gb);
-const onVram = () => device === "cuda" && hw.vramTotal > 0;
+const onVram = () => (device === "cuda" || device === "rocm") && hw.vramTotal > 0;
 function fit(id) {
   const e = ENGINES[id], need = memFor(id);
   if (e.windowsOnly && platform !== "windows") return { ok: false, why: "runs only on Windows for now (it needs WSL)" };
@@ -225,13 +225,13 @@ function renderTop() {
   renderBar();
 }
 function renderBar() {
-  // VRAM when models run on an NVIDIA GPU; otherwise system RAM (integrated GPUs share it).
+  // VRAM when models run on a graphics card; otherwise system RAM (integrated GPUs share it).
   const vram = onVram();
   const total = vram ? hw.vramTotal : hw.ramTotal, used = vram ? hw.vramUsed : hw.ramUsed;
   $(".bar .fill").style.transform = `scaleX(${total ? Math.min(1, used / total) : 0})`;
   const rs = state.resident && state.engineState[state.resident];
   const res = !state.resident ? "nothing loaded" : rs === "loading" ? `loading ${ENGINES[state.resident].name}` : rs === "unloading" ? `unloading ${ENGINES[state.resident].name}` : `${ENGINES[state.resident].name} loaded`;
-  const pool = vram ? "VRAM" : device === "xpu" ? "RAM · Intel GPU" : "RAM · on the CPU";
+  const pool = vram ? "VRAM" : device !== "cpu" ? `RAM · ${DEVICE_NAME[device]}` : "RAM · on the CPU";
   $("#vramText").innerHTML = total ? `<b>${used.toFixed(1)}</b> of ${total.toFixed(1)} GB ${pool} · ${res}` : "Reading hardware…";
 }
 function previewEngine(id) {
@@ -769,7 +769,21 @@ function cancel() { if (!state.busy) return; state.cancelling = true; renderTake
 
 // ---------- recording ----------
 let rec = null;
-function openRecorder() { $("#recorder").classList.add("open"); $("#recToggle").focus(); }
+// The passage starts with the reader's name, so the clip is natural speech ("Hey, it's Mason.") and the name becomes the profile's.
+function remembered(key) { try { return localStorage.getItem(key) || ""; } catch { return ""; } }
+function remember(key, value) { try { localStorage.setItem(key, value); } catch { /* storage off: just not remembered */ } }
+function renderPassageName() {
+  const name = $("#recName").value.trim(), who = $("#recWho");
+  who.textContent = name || "[Name]"; who.classList.toggle("empty", !name);
+  $(".rec-name").classList.remove("missing");
+}
+// What the reader actually says: numbers as words ("6:30" is read "six thirty"), so the transcript matches the audio.
+const spokenPassage = () => [...$("#passage").childNodes].map(n => n.dataset?.say ?? n.textContent).join("").replace(/\s+/g, " ").trim();
+function openRecorder() {
+  $("#recName").value = remembered("recName"); renderPassageName();
+  $("#recorder").classList.add("open");
+  ($("#recName").value ? $("#recToggle") : $("#recName")).focus();
+}
 function closeRecorder() {
   if (rec) { rec.stream.getTracks().forEach(t => t.stop()); rec.ctx.close(); clearInterval(rec.timer); rec = null; }
   $("#recorder").classList.remove("open");
@@ -777,6 +791,7 @@ function closeRecorder() {
 }
 async function toggleRecord() {
   if (!rec) {
+    if (!$("#recName").value.trim()) { $(".rec-name").classList.add("missing"); $("#recName").focus(); log("Type the name you'll say first: the passage starts with it.", true); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: prefs.mic ? { exact: prefs.mic } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const ctx = new AudioContext();
@@ -800,12 +815,14 @@ async function toggleRecord() {
   }
   const { chunks, ctx } = rec, rate = ctx.sampleRate;
   const secs = (performance.now() - rec.t0) / 1000;
+  const name = $("#recName").value.trim(), transcript = spokenPassage();
   closeRecorder();
   if (secs < 3) { log("That recording was under 3 seconds. Read the whole passage.", true); return; }
+  remember("recName", name);
   try {
-    const p = await invoke("save_recording", { wav: wavBase64(chunks, rate), transcript: $("#passage").textContent });
-    replaceProfile(p); selectProfile(p.id); $("#pname")?.select();
-    log(`Saved the profile "${p.name}". The transcript came from the passage you read. Rename it on the left.`);
+    const p = await invoke("save_recording", { wav: wavBase64(chunks, rate), transcript, name });
+    replaceProfile(p); selectProfile(p.id);
+    log(`Saved the voice "${p.name}". The transcript came from the passage you read.`);
   } catch (e) { log(String(e), true); }
 }
 function wavBase64(chunks, rate) {
@@ -829,21 +846,25 @@ function renderEngines() {
   if (!$("#enginesDlg").classList.contains("open")) return;
   const gpu = hw.vramTotal ? `${hw.gpu}, ${hw.vramTotal.toFixed(0)} GB VRAM` : hw.gpu || "no dedicated GPU";
   $("#machine").innerHTML = `This PC: <b>${escapeHtml(gpu)}</b>, <b>${escapeHtml(hw.cpu || "CPU")}</b>, ${hw.ramTotal.toFixed(0)} GB RAM. `
-    + `Engines run on the <b>${DEVICE_NAME[device]}</b> (Settings › Run engines on). Pin the ones you want in the top bar.`;
+    + `Engines run on the <b>${DEVICE_NAME[device]}</b> (Settings › Run engines on). ${hw.note ? escapeHtml(hw.note) + " " : ""}Pin the ones you want in the top bar.`;
   const pins = pinnedIds();
   $("#engList").innerHTML = ALL.filter(listed).map(id => {
     const e = ENGINES[id], f = fit(id);
     const clone = e.transcript ? "Clones from clip + transcript" : "Clones from clip only";
+    // Downloaded for another device (the setting changed): it runs on the CPU until it gets this device's PyTorch.
+    const stale = typeof managed[id] === "string" && !e.cpuOnly && device !== "cpu" && managed[id] !== device;
     let fitText, cls;
     if (installing[id]) { fitText = installing[id]; cls = "busy"; }
     else if (!e.available) { fitText = e.note || "Not in this version yet"; cls = "na"; }
     else if (!f.ok) { fitText = `Won't fit: it ${f.why}`; cls = "no"; }
     else if (!installed[id]) { fitText = e.download ? `Fits this PC · ${e.note || ""}` : "Isn't set up in the engines folder"; cls = e.download ? "yes" : "no"; }
+    else if (stale) { fitText = `Downloaded for the ${DEVICE_NAME[managed[id]] || managed[id]}, so it runs on the CPU until it gets the ${DEVICE_NAME[device]} build`; cls = "no"; }
     else { fitText = state.resident === id ? "Loaded" : `Ready${e.note ? " · " + e.note : ""}`; cls = "yes"; }
     const pin = installed[id] && e.available
       ? `<button class="btn icon" data-pin="${id}" aria-pressed="${pins.includes(id)}" title="${pins.includes(id) ? "Unpin from" : "Pin to"} the top bar">${PIN_ICON}</button>` : "";
     let action = "";
     if (installing[id]) action = `<button class="btn small" disabled>Downloading…</button>`;
+    else if (stale) action = `<button class="btn small" data-install="${id}" title="Download PyTorch for the ${DEVICE_NAME[device]} into this engine">Get ${DEVICE_NAME[device]} build</button>`;
     else if (e.download && managed[id]) action = `<button class="btn small" data-remove="${id}">Remove</button>`;
     else if (e.download && !installed[id]) action = `<button class="btn small" data-install="${id}" ${f.ok ? "" : "disabled"}>Download</button>`;
     return `<div class="eng-row"><div><div class="n">${e.full}</div><div class="sub">${e.license} license${e.download && !installed[id] ? ` · ${e.download}` : ""}</div></div>
@@ -957,8 +978,10 @@ function renderSettings() {
       row("Output device", "", SET.sel("output", [["", "Windows default"], ...devices.out])) +
       row("Play each take when it's ready", "", SET.sw("autoplay"))) +
     section("Engines and memory",
-      row("Run engines on", `Automatic picks the ${DEVICE_NAME[hw.accel || "cpu"]} on this PC${hw.gpu ? ` (${escapeHtml(hw.gpu)})` : ""}. Switching downloads a matching PyTorch the next time you download an engine.`,
-        SET.seg("device", hw.accel && hw.accel !== "cpu" ? ["Automatic", "GPU", "CPU"] : ["Automatic", "CPU"])) +
+      row("Run engines on", `Automatic picks the ${DEVICE_NAME[hw.accel || "cpu"]} on this PC${hw.gpu ? ` (${escapeHtml(hw.gpu)})` : ""}. `
+        + `${hw.note ? escapeHtml(hw.note) + " " : ""}After switching, Engines offers each downloaded engine's build for the new choice.`
+        + `${hw.fix ? `<div class="fix">${escapeHtml(hw.fix)}</div>` : ""}`,
+        SET.seg("device", hw.gpuAccel ? ["Automatic", "GPU", "CPU"] : ["Automatic", "CPU"])) +
       row("Unload the engine when idle for", "Frees memory for games and other apps.", SET.sel("idle", pairs(["5 minutes", "10 minutes", "30 minutes", "Never"]))) +
       row("Load the default engine when Mimic starts", "The first take comes faster, but memory is used right away.", SET.sw("preload")) +
       row("Engines folder", "Model files and their Python environments.", SET.path("enginesDir", "Choose the engines folder")) +
@@ -1055,6 +1078,8 @@ $("#upLater").onclick = closeUpdate;
 $("#upInstall").onclick = installUpdate;
 $("#recToggle").onclick = toggleRecord;
 $("#recCancel").onclick = closeRecorder;
+$("#recName").oninput = renderPassageName;
+$("#recName").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); toggleRecord(); } };
 $("#paletteInput").oninput = () => { palIndex = 0; renderPalette(); };
 $("#paletteList").onclick = e => { const li = e.target.closest("li[data-i]"); if (li) runPalette(+li.dataset.i); };
 for (const [id, close] of [["palette", closePalette], ["recorder", closeRecorder], ["enginesDlg", closeEngines], ["settingsDlg", closeSettings], ["newVoiceDlg", closeNewVoice], ["updateDlg", closeUpdate]])
@@ -1111,6 +1136,13 @@ listen("hardware", ({ payload }) => {
   $("#idle").textContent = r && s != null && !state.busy ? `${ENGINES[r].name} unloads after ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} idle` : "";
 });
 listen("log", ({ payload }) => log(payload));
+// An engine asked for the GPU but its PyTorch couldn't use it, so it loaded on the CPU. Say why and how to fix it.
+listen("fallback", ({ payload }) => {
+  const name = ENGINES[payload.id]?.name || payload.id, build = payload.fallback.build, target = DEVICE_NAME[device];
+  log(build !== device
+    ? `${name} is running on the CPU: it was downloaded for the ${DEVICE_NAME[build] || build}. Open Engines and choose "Get ${target} build".`
+    : `${name} is running on the CPU: PyTorch couldn't reach the ${target}. ${hw.fix || "Check that the GPU's driver is installed and working, then restart Mimic."}`, true);
+});
 listen("caelestia", ({ payload }) => { caelestia = payload; if (prefs.theme === "Caelestia") applyTheme(); });
 
 // ---------- logo: the M talks now and then, and keeps talking while a take is made ----------
@@ -1219,7 +1251,9 @@ async function start() {
   // Clips that were mid-transcription when Mimic last closed get another go.
   profiles.filter(p => p.tx === "transcribing").forEach(transcribe);
   const ready = ALL.filter(usable).map(id => ENGINES[id].name);
-  log(ready.length ? `Ready. Engines on this PC: ${ready.join(", ")}.` : "No engines found. Check the engines folder in Settings.", !ready.length);
+  // A GPU that could run models with one more install (driver, runtime, group) is worth saying at startup.
+  const gpuFix = hw.fix ? ` ${hw.note} ${hw.fix}` : "";
+  log(ready.length ? `Ready. Engines on this PC: ${ready.join(", ")}.${gpuFix}` : `No engines found. Check the engines folder in Settings.${gpuFix}`, !ready.length);
   if (prefs.preload && usable(state.engine) && !state.resident) invoke("preload", { engine: state.engine }).catch(e => log(String(e), true));
 }
 // Scripted test runs (MIMIC_TEST="engine:kitten;voice:Bruno;generate;save") drive the UI from inside,
@@ -1252,6 +1286,8 @@ async function selfTest(script) {
     else if (cmd === "control") { const [k, v] = arg.split("="); setControl(state.engine, k, v === "" ? null : parseFloat(v)); persistPrefs(); renderControls(); }
     else if (cmd === "update" || cmd === "update-pacman") { update = { version: "9.9.9", current: version, notes: (arg || "").replaceAll("|", "\n"), packageManager: cmd === "update-pacman" ? "pacman" : null }; $("#updateBtn").hidden = false; $("#updateBtn").textContent = "Update to 9.9.9"; openUpdate(); } // debug builds never see a real one
     else if (cmd === "settings") await openSettings();
+    else if (cmd === "scroll") [...$$(".set-row .t")].find(t => t.textContent === arg)?.scrollIntoView({ block: "center" });
+    else if (cmd === "recorder") { openRecorder(); if (arg) { $("#recName").value = arg; renderPassageName(); } }
     else if (cmd === "wait") await new Promise(r => setTimeout(r, +arg || 1000));
   }
   trace("test: done");

@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter};
 
 enum Step {
     Venv(&'static str),
-    /// PyTorch built for where models will run (CUDA 12.8 for NVIDIA incl. RTX 50-series, XPU for Intel GPUs, or CPU).
+    /// PyTorch built for where models will run (CUDA 12.8 for NVIDIA incl. RTX 50-series, ROCm for AMD, XPU for Intel GPUs, or CPU).
     Torch,
     /// CPU-only PyTorch, for engines that always run on the CPU (smaller download).
     TorchCpu,
@@ -146,6 +146,28 @@ fn marker(home: &Path, env: &str, id: &str) -> PathBuf {
     home.join(env).join(format!(".mimic-installed-{id}"))
 }
 
+/// Which PyTorch build an engine's environment has ("cuda" | "rocm" | "xpu" | "cpu"), read from the installed
+/// torch's version tag (torch-2.11.0+cu128.dist-info), so it's right however and whenever the engine was installed.
+/// None when the environment has no PyTorch.
+pub fn torch_build(home: &Path, id: &str) -> Option<String> {
+    let env = home.join(recipe(id)?.env);
+    let sites: Vec<PathBuf> = if cfg!(windows) {
+        vec![env.join("Lib").join("site-packages")]
+    } else {
+        std::fs::read_dir(env.join("lib")).into_iter().flatten().flatten().map(|d| d.path().join("site-packages")).collect()
+    };
+    let name = sites.iter().flat_map(|d| std::fs::read_dir(d).into_iter().flatten().flatten()).map(|e| e.file_name().to_string_lossy().to_string())
+        .find(|n| n.starts_with("torch-") && n.ends_with(".dist-info"))?;
+    let tag = name.trim_end_matches(".dist-info").split_once('+').map(|(_, t)| t.to_string()).unwrap_or_default();
+    Some(match tag.as_str() {
+        t if t.starts_with("cu") => "cuda",
+        t if t.starts_with("rocm") => "rocm",
+        t if t.starts_with("xpu") => "xpu",
+        "" if cfg!(target_os = "linux") => "cuda", // plain PyPI torch is the CUDA build on Linux
+        _ => "cpu",
+    }.to_string())
+}
+
 pub fn is_installed(home: &Path, id: &str) -> bool {
     let Some(r) = recipe(id) else { return false };
     marker(home, r.env, id).is_file()
@@ -160,11 +182,17 @@ pub fn downloadable() -> &'static [&'static str] {
 fn torch_args(device: &str) -> Vec<&'static str> {
     let index = match device {
         "cuda" => "https://download.pytorch.org/whl/cu128",
+        "rocm" => "https://download.pytorch.org/whl/rocm7.2", // Linux only; AMD GPUs
         "xpu" => "https://download.pytorch.org/whl/xpu",
         _ => "https://download.pytorch.org/whl/cpu",
     };
-    vec!["torch", "torchaudio", "--index-url", index]
+    vec![TORCH, TORCHAUDIO, "--index-url", index]
 }
+
+/// torch and torchaudio must be the same release (torchaudio's compiled ops are built against it). Unpinned, the ROCm
+/// and XPU indexes pair a newer torch with the newest torchaudio they have, which is older. 2.11 exists on all four.
+const TORCH: &str = "torch==2.11.*";
+const TORCHAUDIO: &str = "torchaudio==2.11.*";
 
 fn uv() -> Result<PathBuf, String> {
     let mut probe = Command::new("uv");
@@ -229,14 +257,14 @@ pub fn install(app: Option<&AppHandle>, home: &Path, logs: &Path, id: &str, devi
                 c.args(["venv", "--python", version]).arg(&env);
                 c
             }
-            Step::Torch => {
+            Step::Torch | Step::TorchCpu => {
+                let build = if matches!(step, Step::Torch) { device } else { "cpu" };
                 let mut c = Command::new(&uv);
-                c.args(["pip", "install", "--python"]).arg(&py).args(torch_args(device));
-                c
-            }
-            Step::TorchCpu => {
-                let mut c = Command::new(&uv);
-                c.args(["pip", "install", "--python"]).arg(&py).args(torch_args("cpu"));
+                c.args(["pip", "install", "--python"]).arg(&py).args(torch_args(build));
+                // A different build is already there (the device setting changed): swap it, since "torch" alone is already satisfied.
+                if torch_build(home, id).is_some_and(|b| b != build) {
+                    c.args(["--reinstall-package", "torch", "--reinstall-package", "torchaudio"]);
+                }
                 c
             }
             Step::Pip(args) => {
@@ -286,4 +314,24 @@ pub fn remove(home: &Path, id: &str) -> Result<(), String> {
         std::fs::remove_dir_all(home.join(env)).map_err(|e| format!("couldn't delete {}: {e}", home.join(env).display()))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn torch_build_comes_from_the_installed_version_tag() {
+        let home = std::env::temp_dir().join(format!("mimic-torch-build-{}", std::process::id()));
+        let site = if cfg!(windows) { home.join("qwen-env").join("Lib").join("site-packages") } else { home.join("qwen-env").join("lib").join("python3.12").join("site-packages") };
+        assert_eq!(torch_build(&home, "qwen06"), None);
+        for (dir, want) in [("torch-2.11.0+cu128.dist-info", "cuda"), ("torch-2.11.0+rocm7.2.dist-info", "rocm"), ("torch-2.11.0+xpu.dist-info", "xpu"), ("torch-2.11.0+cpu.dist-info", "cpu")] {
+            let _ = std::fs::remove_dir_all(&site);
+            std::fs::create_dir_all(site.join(dir)).unwrap();
+            std::fs::create_dir_all(site.join("torchaudio-2.11.0+cu128.dist-info")).unwrap(); // must not be mistaken for torch
+            assert_eq!(torch_build(&home, "qwen06").as_deref(), Some(want), "{dir}");
+            assert_eq!(torch_build(&home, "qwen17").as_deref(), Some(want), "shared environment");
+        }
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

@@ -16,9 +16,11 @@ sys.stdin.reconfigure(encoding="utf-8")
 
 import numpy
 import soundfile as sf
+import torch
 from kittenml import KittenTTS
 
 from chunks import GAP_SECONDS, sentences
+from device import pick
 
 HOME = os.environ.get("TTS_HOME", r"C:\Users\mason\tts")
 MODEL = os.path.join(HOME, "models", "kitten-tts-2")
@@ -43,9 +45,9 @@ def seed_everything(seed):
         pass
 
 
-DEVICE = os.environ.get("MIMIC_DEVICE") or None  # "cuda" | "xpu" | "cpu"; None lets Kitten choose
-model = KittenTTS(MODEL, device=DEVICE)
-send(event="ready", voices=list(model.available_voices))
+device, fallback = pick(torch)
+model = KittenTTS(MODEL, device=device)
+send(event="ready", voices=list(model.available_voices), device=device, fallback=fallback)
 
 for line in sys.stdin:
     line = line.lstrip("\ufeff").strip()

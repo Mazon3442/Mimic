@@ -20,6 +20,7 @@ import torch
 from chatterbox.tts_turbo import ChatterboxTurboTTS
 
 from chunks import GAP_SECONDS, sentences
+from device import pick
 
 MODEL = sys.argv[1]
 MIN_CLIP = 5.0  # the library refuses anything shorter
@@ -30,20 +31,9 @@ def send(**message):
     real_out.flush()
 
 
-def pick_device():
-    wanted = os.environ.get("MIMIC_DEVICE", "")
-    if wanted == "cuda" and torch.cuda.is_available():
-        return "cuda"
-    if wanted == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available():
-        return "xpu"
-    if not wanted and torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
-device = pick_device()
+device, fallback = pick(torch)
 model = ChatterboxTurboTTS.from_local(MODEL, device)
-send(event="ready", model=MODEL, device=device)
+send(event="ready", model=MODEL, device=device, fallback=fallback)
 
 voices = {}  # clip path -> conditionals, so a profile is only analyzed once
 

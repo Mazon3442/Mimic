@@ -48,6 +48,12 @@ impl App {
         let home = PathBuf::from(&self.settings.lock().unwrap().engines_dir);
         let hf_token = self.settings.lock().unwrap().hf_token.clone();
         let device = self.device();
+        // ROCm settings go to engines only on an AMD GPU, and never over values the user set themselves.
+        let device_env = if device == "rocm" {
+            self.hw.lock().unwrap().rocm_env.iter().filter(|(k, _)| std::env::var_os(k).is_none()).cloned().collect()
+        } else {
+            Vec::new()
+        };
         engines::Paths {
             home,
             workers: self.dirs.resources.join("engines"),
@@ -55,6 +61,7 @@ impl App {
             logs: self.dirs.logs.clone(),
             takes: self.dirs.takes.clone(),
             device,
+            device_env,
             hf_token,
         }
     }
@@ -184,7 +191,7 @@ async fn import_path(app: State<'_, Shared>, path: String) -> Result<Profile, St
 }
 
 #[tauri::command]
-async fn save_recording(app: State<'_, Shared>, wav: String, transcript: String) -> Result<Profile, String> {
+async fn save_recording(app: State<'_, Shared>, wav: String, transcript: String, name: Option<String>) -> Result<Profile, String> {
     let app = app.inner().clone();
     blocking(move || {
         let raw = app.dirs.voices.join(format!("rec{}-raw.wav", now_ms()));
@@ -193,7 +200,8 @@ async fn save_recording(app: State<'_, Shared>, wav: String, transcript: String)
         let converted = audio::to_reference_wav(&raw, &dst);
         let _ = std::fs::remove_file(&raw);
         converted?;
-        let p = new_profile("New voice", &dst, &transcript, "read", &app)?;
+        let name = name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or_else(|| "New voice".into());
+        let p = new_profile(&name, &dst, &transcript, "read", &app)?;
         app.put_profile(p)
     })
     .await
@@ -415,9 +423,17 @@ fn reveal(path: String) {
     }
 }
 
-/// Which engines Mimic downloaded itself (and so may delete).
+/// Which engines Mimic downloaded itself (and so may delete): false, or the PyTorch build it has ("cuda", "rocm", "xpu", "cpu").
 fn managed(home: &Path) -> Value {
-    install::downloadable().iter().map(|id| (id.to_string(), Value::from(install::is_installed(home, id)))).collect::<serde_json::Map<_, _>>().into()
+    install::downloadable()
+        .iter()
+        .map(|id| {
+            // Engines without PyTorch (speech-to-text) count as CPU builds.
+            let v = if install::is_installed(home, id) { Value::from(install::torch_build(home, id).unwrap_or_else(|| "cpu".into())) } else { Value::from(false) };
+            (id.to_string(), v)
+        })
+        .collect::<serde_json::Map<_, _>>()
+        .into()
 }
 
 // ---------------------------------------------------------------- updates

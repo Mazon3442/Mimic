@@ -18,6 +18,8 @@ import soundfile as sf
 import torch
 from transformers import AutoModel, AutoProcessor
 
+from device import pick
+
 MODEL = sys.argv[1]
 MAX_FRAMES = 1536  # about 70 s of speech; the context also has to hold the reference clip
 
@@ -27,22 +29,12 @@ def send(**message):
     real_out.flush()
 
 
-def pick_device():
-    wanted = os.environ.get("MIMIC_DEVICE", "")
-    if wanted == "cuda" and torch.cuda.is_available():
-        return "cuda", torch.bfloat16
-    if wanted == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available():
-        return "xpu", torch.bfloat16
-    if not wanted and torch.cuda.is_available():
-        return "cuda", torch.bfloat16
-    return "cpu", torch.float32
-
-
-device, dtype = pick_device()
+device, fallback = pick(torch)
+dtype = torch.float32 if device == "cpu" else torch.bfloat16
 processor = AutoProcessor.from_pretrained(MODEL, trust_remote_code=True)
 model = AutoModel.from_pretrained(MODEL, trust_remote_code=True, dtype=dtype).eval().to(device)
 rate = model.config.codec_sample_rate
-send(event="ready", model=MODEL, device=device)
+send(event="ready", model=MODEL, device=device, fallback=fallback)
 
 for line in sys.stdin:
     line = line.lstrip("﻿").strip()

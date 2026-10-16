@@ -152,7 +152,8 @@
   <div class="dialog rec" role="dialog" aria-label="Record a voice">
     <h3>Record a voice</h3>
     <p class="why">Read this aloud. Mimic already knows the words, so the transcript is exact and every engine can use the clip straight away.</p>
-    <p class="read" id="passage">The quick spring rain had stopped by noon, so we walked down to the harbor and counted the boats coming in, one by one, until the light went orange.</p>
+    <label class="rec-name"><span>Your name</span><input id="recName" placeholder="The name you'll say" autocomplete="off" spellcheck="false"></label>
+    <p class="read" id="passage">Hey, it's <span id="recWho" class="who">[Name]</span>. Quick question. Have you ever watched the sunrise over the Badlands, the sky shift from deep purple to bright gold, and honestly, it's breathtaking. Anyway, I'll check the forecast and call you back around <span data-say="six thirty">6:30</span>.</p>
     <div class="level"><span id="level"></span></div>
     <div class="rec-foot">
       <span class="rec-time" id="recTime">0.0 s of 8 to 20 s</span>

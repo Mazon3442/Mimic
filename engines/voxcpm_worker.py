@@ -18,6 +18,8 @@ import soundfile as sf
 import torch
 from voxcpm import VoxCPM
 
+from device import pick
+
 MODEL = sys.argv[1]
 
 
@@ -26,22 +28,11 @@ def send(**message):
     real_out.flush()
 
 
-def pick_device():
-    wanted = os.environ.get("MIMIC_DEVICE", "")
-    if wanted == "cuda" and torch.cuda.is_available():
-        return "cuda"
-    if wanted == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available():
-        return "xpu"
-    if not wanted and torch.cuda.is_available():
-        return "cuda"
-    return "cpu"
-
-
-device = pick_device()
+device, fallback = pick(torch)
 # optimize=False skips torch.compile, which needs Triton (not available on Windows) and slows the first take.
 model = VoxCPM.from_pretrained(MODEL, load_denoiser=False, optimize=False, local_files_only=True, device=device)
 rate = model.tts_model.sample_rate
-send(event="ready", model=MODEL, device=device)
+send(event="ready", model=MODEL, device=device, fallback=fallback)
 
 for line in sys.stdin:
     line = line.lstrip("﻿").strip()

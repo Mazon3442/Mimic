@@ -27,8 +27,10 @@ pub struct Paths {
     pub scripts: PathBuf,
     pub logs: PathBuf,
     pub takes: PathBuf,
-    /// Where models run: "cuda", "xpu" (Intel GPU) or "cpu". Passed to workers as MIMIC_DEVICE.
+    /// Where models run: "cuda", "rocm" (AMD GPU), "xpu" (Intel GPU) or "cpu". Workers get the PyTorch device as MIMIC_DEVICE.
     pub device: String,
+    /// Extra environment for the engine on this device (ROCm's GPU choice and compatibility target).
+    pub device_env: Vec<(String, String)>,
     pub hf_token: String,
 }
 
@@ -112,12 +114,13 @@ impl Manager {
 
     fn load(&self, paths: &Paths, engine: &str) -> Result<Resident, String> {
         let home = paths.home.to_string_lossy().to_string();
-        let envs = [
+        let mut envs = vec![
             ("TTS_HOME", home.clone()),
-            ("MIMIC_DEVICE", paths.device.clone()),
+            ("MIMIC_DEVICE", crate::hw::torch_device(&paths.device).to_string()),
             ("HF_HUB_DISABLE_SYMLINKS_WARNING", "1".to_string()),
             ("HF_TOKEN", paths.hf_token.clone()),
         ];
+        envs.extend(paths.device_env.iter().map(|(k, v)| (k.as_str(), v.clone())));
         let start_py = |env: &str, script: &str, args: &[&str]| {
             Worker::start(&paths.python(env), &paths.workers.join(script), args, &envs, &paths.logs.join(format!("{engine}.log")), LOAD_TIMEOUT)
         };
@@ -161,6 +164,12 @@ impl Manager {
                     Resident::Py(w) => w.killer(),
                     Resident::Fish(s) => s.killer(),
                 });
+                // A worker that was asked for a GPU but couldn't use it says so; the UI explains the fix.
+                if let Resident::Py(w) = &r {
+                    if w.hello["fallback"].is_object() {
+                        let _ = app.emit("fallback", json!({ "id": engine, "fallback": w.hello["fallback"] }));
+                    }
+                }
                 *slot = Some((engine.to_string(), r));
                 *self.last_used.lock().unwrap() = Some(Instant::now());
                 emit(app, engine, "warm");

@@ -18,6 +18,8 @@ import soundfile as sf
 import torch
 from qwen_tts import Qwen3TTSModel
 
+from device import pick
+
 REPO = sys.argv[1] if len(sys.argv) > 1 else "Qwen/Qwen3-TTS-12Hz-0.6B-Base"
 
 
@@ -26,20 +28,10 @@ def send(**message):
     real_out.flush()
 
 
-def pick_device():
-    wanted = os.environ.get("MIMIC_DEVICE", "")
-    if wanted == "cuda" and torch.cuda.is_available():
-        return "cuda:0", torch.bfloat16
-    if wanted == "xpu" and hasattr(torch, "xpu") and torch.xpu.is_available():
-        return "xpu", torch.bfloat16
-    if not wanted and torch.cuda.is_available():
-        return "cuda:0", torch.bfloat16
-    return "cpu", torch.float32  # bfloat16 is slow or unsupported on most laptop CPUs
-
-
-device, dtype = pick_device()
-model = Qwen3TTSModel.from_pretrained(REPO, device_map=device, dtype=dtype)
-send(event="ready", model=REPO, device=device)
+device, fallback = pick(torch)
+dtype = torch.float32 if device == "cpu" else torch.bfloat16  # bfloat16 is slow or unsupported on most laptop CPUs
+model = Qwen3TTSModel.from_pretrained(REPO, device_map="cuda:0" if device == "cuda" else device, dtype=dtype)
+send(event="ready", model=REPO, device=device, fallback=fallback)
 
 prompts = {}  # (clip, transcript) -> voice clone prompt, so a profile is only analyzed once
 
