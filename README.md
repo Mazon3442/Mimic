@@ -29,7 +29,7 @@
 | --- | --- |
 | **Voice profiles** | Record a voice by reading a short passage, import a clip, or drop audio files onto the window. Each profile keeps its clip, transcript and favorite settings. |
 | **Automatic transcripts** | Clips are transcribed on your machine with faster-whisper, so engines that need the exact words get them without typing. |
-| **Six engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Qwen3-TTS 0.6B and 1.7B, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
+| **Nine engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Qwen3-TTS 0.6B and 1.7B, Chatterbox Turbo, VoxCPM2, Audio8 TTS Preview, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
 | **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an Intel Arc GPU (experimental) or the CPU. The bar at the top shows real VRAM or RAM use. |
 | **One engine in memory** | Switching engines unloads the old one first, and idle engines unload after a set time, so the GPU is free for everything else. |
 | **Nothing saved behind your back** | Takes stay in a temporary cache until you press Save (Ctrl+S) or Save as (Ctrl+Shift+S). WAV, FLAC or MP3. |
@@ -80,12 +80,15 @@ Only clone voices you have permission to use.
 | --- | --- | --- | --- | --- | --- |
 | **Qwen3-TTS 0.6B** | GPU or CPU | 2.4 GB VRAM · 5.6 GB RAM | clip + transcript | Download in Mimic | Apache 2.0 |
 | **Qwen3-TTS 1.7B** | GPU or CPU | 4.7 GB VRAM · 10.9 GB RAM | clip + transcript | Download in Mimic | Apache 2.0 |
+| **Chatterbox Turbo** | GPU or CPU | 3.4 GB VRAM · 6.0 GB RAM | clip only (over 5 s) | Download in Mimic | MIT |
+| **VoxCPM2** | NVIDIA GPU | 6.9 GB VRAM | clip + transcript | Download in Mimic | Apache 2.0 |
+| **Audio8 TTS Preview 0.6B** | GPU or CPU | 3.6 GB VRAM · 6.1 GB RAM | clip + transcript | Download in Mimic | Apache 2.0 |
 | **KittenTTS 2** | GPU (CPU possible) | 8.8 GB VRAM · 14.5 GB RAM | clip only | Download in Mimic | Stellon Labs Community |
 | **NeuTTS Air** | CPU (Linux) | about 1 GB RAM¹ | clip (3–15 s) + transcript | Download in Mimic, needs a free Hugging Face account | Apache 2.0 |
 | **Breeze TTS 2** | NVIDIA GPU | about 8 GB VRAM¹ | clip + transcript | Set up by hand | Non-commercial |
 | **Fish S2 Pro** | NVIDIA GPU, Windows (WSL) | about 15 GB VRAM¹ | clip + transcript | Set up by hand | See model card |
 
-<sub>Qwen and Kitten figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic.</sub>
+<sub>Qwen, Kitten, Chatterbox, VoxCPM2 and Audio8 figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic.</sub>
 
 <div align="center">
 <picture>
@@ -146,6 +149,9 @@ Engines, their Python environments and model files live in one folder (Settings 
 ```text
 qwen-env/   models/Qwen3-TTS-12Hz-0.6B-Base/   models/Qwen3-TTS-12Hz-1.7B-Base/
 kitten-env/ models/kitten-tts-2/
+chatterbox-env/ models/chatterbox-turbo/
+voxcpm-env/ models/VoxCPM2/
+audio8-env/ models/Audio8-TTS-Preview-0.6b/
 neutts-env/
 stt-env/
 ```
@@ -153,7 +159,7 @@ stt-env/
 Engines can be downloaded without opening the window:
 
 ```bash
-mimic --install qwen06      # also: qwen17, kitten, neutts, stt
+mimic --install qwen06      # also: qwen17, kitten, chatterbox, voxcpm, audio8, neutts, stt
 ```
 
 Breeze TTS 2 and Fish S2 Pro are set up by hand: `breeze-env/`, `models/breeze-tts-2/` and the `breeze-tts/` repo for Breeze, and `scripts/setup-vllm-wsl.sh` in WSL Ubuntu 24.04 for Fish (set `FISH_WEIGHTS` to the folder holding the weights).

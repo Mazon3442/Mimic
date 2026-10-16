@@ -45,6 +45,12 @@ from neutts import NeuTTS
 NeuTTS(backbone_repo="neuphonic/neutts-air-q4-gguf", backbone_device="cpu", codec_repo="neuphonic/neucodec", codec_device="cpu")
 "#;
 
+/// The repo also holds the original Chatterbox decoder (s3gen.safetensors, 1 GB), which Turbo never loads.
+const CHATTERBOX_FETCH: &str = r#"
+from huggingface_hub import snapshot_download
+snapshot_download("ResembleAI/chatterbox-turbo", local_dir=r"{dir}", ignore_patterns=["s3gen.safetensors"])
+"#;
+
 fn recipe(id: &str) -> Option<Recipe> {
     let qwen = |repo: &'static str, folder: &'static str| Recipe {
         env: "qwen-env",
@@ -80,6 +86,40 @@ fn recipe(id: &str) -> Option<Recipe> {
                 ("Downloading the model", Step::Script(NEUTTS_FETCH)),
             ],
         }),
+        "chatterbox" => Some(Recipe {
+            env: "chatterbox-env",
+            model: Some("chatterbox-turbo"),
+            steps: vec![
+                ("Creating the Python environment", Step::Venv("3.12")),
+                ("Installing PyTorch", Step::Torch),
+                // chatterbox-tts pins torch 2.6, which has no kernels for RTX 50-series cards, so its own pins
+                // are skipped and its dependencies installed next to the PyTorch above (gradio is only its demo UI).
+                ("Installing Chatterbox", Step::Pip(&["chatterbox-tts", "--no-deps"])),
+                ("Installing Chatterbox's libraries", Step::Pip(&["numpy<2", "librosa==0.11.0", "s3tokenizer", "transformers==5.2.0",
+                    "diffusers==0.29.0", "resemble-perth", "conformer==0.3.2", "safetensors", "pyloudnorm", "omegaconf", "soundfile"])),
+                ("Downloading the model", Step::Script(CHATTERBOX_FETCH)),
+            ],
+        }),
+        "voxcpm" => Some(Recipe {
+            env: "voxcpm-env",
+            model: Some("VoxCPM2"),
+            steps: vec![
+                ("Creating the Python environment", Step::Venv("3.12")),
+                ("Installing PyTorch", Step::Torch),
+                ("Installing VoxCPM", Step::Pip(&["voxcpm", "soundfile"])),
+                ("Downloading the model", Step::Fetch("openbmb/VoxCPM2")),
+            ],
+        }),
+        "audio8" => Some(Recipe {
+            env: "audio8-env",
+            model: Some("Audio8-TTS-Preview-0.6b"),
+            steps: vec![
+                ("Creating the Python environment", Step::Venv("3.12")),
+                ("Installing PyTorch", Step::Torch),
+                ("Installing Transformers", Step::Pip(&["transformers>=4.57.0,<5", "soundfile", "safetensors"])),
+                ("Downloading the model", Step::Fetch("Audio8/Audio8-TTS-Preview-0.6b")),
+            ],
+        }),
         "stt" => Some(Recipe {
             env: "stt-env",
             model: None,
@@ -110,11 +150,11 @@ pub fn is_installed(home: &Path, id: &str) -> bool {
     let Some(r) = recipe(id) else { return false };
     marker(home, r.env, id).is_file()
         && venv_python(&home.join(r.env)).is_file()
-        && model_dir(home, id).map(|d| d.join("config.json").is_file()).unwrap_or(true)
+        && model_dir(home, id).map(|d| d.read_dir().map(|mut files| files.next().is_some()).unwrap_or(false)).unwrap_or(true)
 }
 
 pub fn downloadable() -> &'static [&'static str] {
-    &["kitten", "qwen06", "qwen17", "neutts", "stt"]
+    &["kitten", "qwen06", "qwen17", "chatterbox", "voxcpm", "audio8", "neutts", "stt"]
 }
 
 fn torch_args(device: &str) -> Vec<&'static str> {

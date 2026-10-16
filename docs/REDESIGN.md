@@ -162,10 +162,13 @@ every engine with its device, memory need, what it clones from, license, and a f
 | Breeze TTS 2 | GPU | ~8 GB VRAM | clip + transcript | non-commercial | 10 GB+ GPUs |
 | KittenTTS 2 | GPU | ~5 GB VRAM (to measure) | clip only | open | 6 GB+ GPUs |
 | Qwen3-TTS 0.6B | GPU | ~4-6 GB VRAM (sources disagree) | clip + transcript | Apache 2.0 | small GPUs |
-| Chatterbox Turbo 350M | GPU, CPU slow | ~4 GB VRAM (unconfirmed) | clip only | MIT | small GPUs |
+| Chatterbox Turbo 350M | GPU or CPU | 3.4 GB VRAM / 6.0 GB RAM (measured) | clip only (over 5 s) | MIT | small GPUs, CPU |
+| VoxCPM2 2B | GPU | 6.9 GB VRAM (measured) | clip + transcript | Apache 2.0 | 8 GB+ GPUs |
+| Audio8 TTS Preview 0.6B | GPU or CPU (slow) | 3.6 GB VRAM / 6.1 GB RAM (measured) | clip + transcript | Apache 2.0 | small GPUs |
 | NeuTTS Air, Q4 GGUF | CPU (llama.cpp) | ~0.5-1 GB RAM | clip (3-15 s) + transcript | Apache 2.0 | no GPU / low RAM |
 
-Candidates to check later: PocketTTS (100M, CPU-first cloning; one source only), VoxCPM2.
+Candidates to check later: PocketTTS (100M, CPU-first cloning; one source only). Cactus Whistle (16.9 MB) is speech-to-text,
+not TTS: a possible lighter replacement for faster-whisper transcripts on laptops.
 All figures are third-party estimates; phase 0 measures each one on this machine, and Mimic records the real peak the first
 time an engine loads. On a CPU-only machine the memory bar shows RAM instead of VRAM.
 

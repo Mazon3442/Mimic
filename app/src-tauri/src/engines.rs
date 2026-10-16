@@ -130,10 +130,11 @@ impl Manager {
                 Ok(Resident::Py(w))
             }
             "breeze" => Ok(Resident::Py(start_py("breeze-env", "breeze_worker.py", &[])?)),
-            "qwen06" | "qwen17" => {
+            "qwen06" | "qwen17" | "chatterbox" | "voxcpm" | "audio8" => {
                 let env = crate::install::env_for(engine).unwrap();
                 let model = crate::install::model_dir(&paths.home, engine).unwrap().to_string_lossy().to_string();
-                Ok(Resident::Py(start_py(env, "qwen_worker.py", &[model.as_str()])?))
+                let script = if engine.starts_with("qwen") { "qwen_worker.py".to_string() } else { format!("{engine}_worker.py") };
+                Ok(Resident::Py(start_py(env, &script, &[model.as_str()])?))
             }
             "neutts" => Ok(Resident::Py(start_py("neutts-env", "neutts_worker.py", &[])?)),
             "fish" if cfg!(windows) => Ok(Resident::Fish(fish::Server::start(&paths.scripts, &paths.logs.join("fish.log"))?)),
@@ -187,7 +188,7 @@ impl Manager {
             if !clip.is_file() {
                 return Err(format!("{}'s clip is missing ({})", profile.name, profile.clip));
             }
-            if req.engine != "kitten" && profile.transcript.trim().is_empty() {
+            if !matches!(req.engine.as_str(), "kitten" | "chatterbox") && profile.transcript.trim().is_empty() {
                 return Err(format!("{} needs the clip's transcript first", req.engine));
             }
         }

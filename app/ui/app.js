@@ -27,8 +27,14 @@ const ENGINES = {
                 download: "about 5 GB", note: "Small and quick. Clones from 3 s of audio.", tag: () => "", has: [] },
   qwen17:     { name: "Qwen 1.7B", full: "Qwen3-TTS 1.7B", gb: 4.7, cpuGb: 10.9, transcript: true, license: "Apache 2.0", real: "about 25 s", available: true,
                 download: "about 5 GB (shares PyTorch with 0.6B)", note: "Higher quality than 0.6B, slower.", tag: () => "", has: [] },
-  chatterbox: { name: "Chatterbox", full: "Chatterbox Turbo, 350M", gb: 4.0, cpuGb: null, transcript: false, license: "MIT", available: false,
-                note: "Setup still being tested.", tag: t => `[${t}]`, has: [] },
+  chatterbox: { name: "Chatterbox", full: "Chatterbox Turbo, 350M", gb: 3.5, cpuGb: 6.0, transcript: false, minClip: 5, license: "MIT",
+                real: "up to a minute", available: true, download: "about 3 GB model + PyTorch",
+                note: "Fastest clone: quicker than real time on a GPU, usable on a CPU. Clip of 5 s or more. Adds an inaudible watermark.",
+                tag: t => `[${t}]`, has: ["laugh", "chuckle", "sigh", "cough", "gasp"] },
+  voxcpm:     { name: "VoxCPM2", full: "VoxCPM2, 2B", gb: 7.0, cpuGb: null, transcript: true, license: "Apache 2.0", real: "about 35 s", available: true,
+                download: "about 5 GB model + PyTorch", note: "48 kHz studio-quality output, 30 languages.", tag: () => "", has: [] },
+  audio8:     { name: "Audio8", full: "Audio8 TTS Preview, 0.6B", gb: 3.7, cpuGb: 6.1, transcript: true, license: "Apache 2.0", real: "about 20 s", available: true,
+                download: "about 2.5 GB model + PyTorch", note: "Preview release. 44.1 kHz, 11 languages. Slower than Qwen.", tag: () => "", has: [] },
   neutts:     { name: "NeuTTS", full: "NeuTTS Air, Q4", gb: null, cpuGb: 1.5, cpuOnly: true, maxClip: 15, transcript: true, license: "Apache 2.0",
                 real: "a few seconds", available: true, download: "about 1.5 GB (PyTorch for CPU + model)",
                 linuxOnly: true, needsAccount: true,
@@ -54,8 +60,9 @@ const CONTROL = {
   top_k: { label: "Top K", icon: "list", min: 0, max: 100, step: 1, digits: 0, hint: "How many choices are weighed at each step. 0 means no limit." },
   repetition_penalty: { label: "Repetition penalty", icon: "repeat", min: 1, max: 2, step: 0.01, hint: "Stops the voice from stalling or looping. Too high clips repeated sounds." },
   // Breeze's plain clone template has no negative prompt, so guidance only exists in Design and Direction.
-  cfg: { label: "Guidance (CFG)", icon: "target", min: 1, max: 8, step: 0.1, digits: 1, when: () => state.breezeMode !== "Clone",
-         hint: "How strictly it follows your description. Higher is stricter." },
+  cfg: { label: "Guidance (CFG)", icon: "target", min: 1, max: 8, step: 0.1, digits: 1, when: () => state.engine !== "breeze" || state.breezeMode !== "Clone",
+         hint: "How strictly it follows the text and voice. Higher is stricter, too high sounds forced." },
+  steps: { label: "Quality steps", icon: "target", min: 4, max: 30, step: 1, digits: 0, hint: "Refinement passes for each bit of audio. More is cleaner and slower." },
   gap: { label: "Pause between sentences", icon: "pause", min: 0, max: 1, step: 0.02, unit: " s", hint: "Silence added where sentences are joined." },
 };
 // Engine defaults, read from each engine's own config. A function default follows the current style or mode.
@@ -65,6 +72,9 @@ const ENGINE_CONTROLS = {
   kitten: { temperature: kittenPreset([0.8, 0.9]), top_p: kittenPreset([0.8, 0.9]), top_k: 50, repetition_penalty: 1.1, gap: 0.18 },
   breeze: { cfg: 4, temperature: 0.9, top_p: 1, top_k: 0, repetition_penalty: 1.1 },
   qwen06: QWEN_CONTROLS, qwen17: QWEN_CONTROLS,
+  chatterbox: { temperature: 0.8, top_p: 0.95, top_k: 0, repetition_penalty: 1.2, gap: 0.18 },
+  voxcpm: { cfg: 2, steps: 10 },
+  audio8: { temperature: 0.7, top_p: 0.9, top_k: 50 },
   neutts: { gap: 0.18 },
 };
 const PIN_ICON =`<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M6 2h4l-.6 4 2.6 2.4V10H4V8.4L6.6 6z"/><path d="M8 10v4" stroke-linecap="round"/></svg>`;
@@ -73,6 +83,7 @@ const ALL = Object.keys(ENGINES);
 const SOUNDS = [
   ["laugh", "A short laugh."], ["sigh", "An audible sigh."], ["pause", "A beat of silence."],
   ["breath", "A breath in before the next words."], ["excited", "Reads the next words with energy."],
+  ["chuckle", "A quiet chuckle."], ["cough", "A short cough."], ["gasp", "A sharp breath in."],
 ];
 const MODES = {
   breeze: { key: "breezeMode", word: "mode", options: [
@@ -140,7 +151,8 @@ function readiness(v, engine) {
   const e = ENGINES[engine];
   if (!v) return { ok: false, why: "pick a voice" };
   if (v.builtin) return engine === "kitten" ? { ok: true } : { ok: false, why: `${v.name} is a built-in Kitten voice` };
-  if (v.duration < 3) return { ok: false, why: `the clip is ${v.duration.toFixed(1)} s; it needs at least 3 s` };
+  const minClip = e.minClip || 3;
+  if (v.duration < minClip) return { ok: false, why: `the clip is ${v.duration.toFixed(1)} s; ${e.minClip ? e.name : "it"} needs at least ${minClip} s` };
   if (e.maxClip && v.duration > e.maxClip) return { ok: false, why: `the clip is ${v.duration.toFixed(1)} s; ${e.name} needs ${e.maxClip} s or less. Record a shorter clip` };
   if (e.transcript && v.tx === "transcribing") return { ok: false, why: "the transcript is still being written", wait: true };
   if (e.transcript && !v.transcript.trim()) return { ok: false, why: `${e.name} needs the transcript of the clip`, fix: "transcribe" };
