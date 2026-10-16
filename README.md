@@ -13,7 +13,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-555?style=flat-square)](#install)
 [![Built with Tauri 2 and Rust](https://img.shields.io/badge/built%20with-Tauri%202%20%2B%20Rust-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 
-[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Engines](#engines) · [How it works](#how-it-works) · [Build from source](#build-from-source)
+[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Engines](#engines) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [Responsible use](#responsible-use) · [Privacy](#privacy)
 
 <br>
 
@@ -70,10 +70,10 @@ sudo pacman -S --needed uv ffmpeg pciutils xdg-user-dirs  # Arch
 
 1. Open **Settings › Engines** and download an engine that fits your PC. *Qwen3-TTS 0.6B* is a good first pick: about 2.5 GB of VRAM, or about 6 GB of RAM on the CPU.
 2. Download **speech-to-text** from the same list, so transcripts write themselves.
-3. Press **Record** and read the passage, or drop a 3–30 second clip of one speaker onto the window.
+3. Press **Record**, type your name and read the short passage, or drop a 3–30 second clip of one speaker onto the window.
 4. Type a script, press **Ctrl+Enter**, then **Space** to listen and **Ctrl+S** to keep the take.
 
-Only clone voices you have permission to use.
+Only clone voices you have permission to use. Mimic asks you to confirm this once, before your first clone.
 
 ## Engines
 
@@ -177,10 +177,16 @@ Breeze TTS 2 and Fish S2 Pro are set up by hand: `breeze-env/`, `models/breeze-t
 
 Settings › **Use from another device** shares this PC's Mimic with a browser on your laptop or phone: the interface runs there, the engines run here. Nothing is shared until you press a button, and sharing stops when Mimic closes.
 
-- **This network:** a link like `http://192.168.1.20:4777/pair?t=…` for devices on the same Wi-Fi. Mimic listens only on the adapter with a home-network address, so a PC that's also plugged straight into the internet stays closed there; with no home network it refuses and suggests Tailscale. Windows asks once to allow Mimic through the firewall, and the home network has to be set to *Private* in Windows for other devices to reach it. Browsers only allow the microphone over HTTPS, so record voices on this PC (importing and dropping clips works from the other device).
-- **Anywhere (Tailscale):** install [Tailscale](https://tailscale.com/download) on both devices and sign in to the same account. Mimic uses `tailscale serve` to give you an HTTPS link (`https://<this-pc>.<tailnet>.ts.net`) that only your devices can reach, from any network, with recording too. The first time, Tailscale may ask you to turn on HTTPS for your tailnet; Mimic shows the link. On Linux, run `sudo tailscale set --operator=$USER` once so Mimic can set this up.
-- **The link is the key.** It carries a secret that the browser keeps as a cookie. Anyone with the link can use Mimic on this PC, so send it only to your own devices. **New link** replaces the secret and signs out every device that used the old one.
-- In the browser, **Save** downloads the take to that device (in the format from Settings), and imports upload clips from it. Folders, the engines folder, the Hugging Face token and updates stay on this PC.
+| | This network | Anywhere (Tailscale) |
+| --- | --- | --- |
+| **Reach** | Devices on the same Wi-Fi | Your own devices, from any network |
+| **Link** | `http://192.168.1.20:4777/pair?t=…` | `https://<this-pc>.<tailnet>.ts.net/pair?t=…` |
+| **Microphone** | Record on this PC (browsers only allow the mic over HTTPS) | Record from any of your devices |
+| **Setup** | Set the home network to *Private* in Windows, and allow Mimic through the firewall once | [Tailscale](https://tailscale.com/download) on both devices, same account. The first time, turn on HTTPS for your tailnet (Mimic shows the link). On Linux, run `sudo tailscale set --operator=$USER` once |
+
+- **The link is the key.** It carries a secret that the browser keeps as a cookie, and anyone with it can use Mimic on this PC, so send it only to your own devices. **New link** signs out every device that used the old one.
+- **Closed to the internet.** On this network, Mimic listens only on the home-network adapter, never on a connection plugged straight into the internet, and with no home network it suggests Tailscale instead.
+- **In the browser,** Save downloads takes to that device and imports upload clips from it. Folders, the engines folder, the Hugging Face token and updates stay on this PC.
 
 </details>
 
@@ -212,9 +218,17 @@ sudo apt install build-essential pkg-config libssl-dev libxdo-dev libwebkit2gtk-
 
 ```bash
 cd app/src-tauri
-cargo run                                # development build
-npx @tauri-apps/cli@2 build              # Windows installer in target/release/bundle/nsis
+cargo run                                                # development build (never offers updates)
+cargo run --release                                      # optimized build, as shipped
+npx @tauri-apps/cli@2 build                              # Windows installer in target/release/bundle/nsis
 npx @tauri-apps/cli@2 build --bundles deb,rpm,appimage   # Linux packages
+```
+
+The interface (`app/ui`) is packed into the app at build time, so run it again after editing it. After changing Rust dependencies, regenerate the license notices that ship with the app:
+
+```bash
+cargo install cargo-about --features cli                         # once
+cargo about generate about.hbs -o ../../THIRD-PARTY-NOTICES.md   # from app/src-tauri
 ```
 
 Releases come from GitHub Actions: push an annotated tag such as `v1.2.0` and `.github/workflows/release.yml` builds the Windows installer and the Linux `.deb`, `.rpm` and AppImage, signs them and publishes one release with a `latest.json`. Installed copies check that file on start and offer the update (Settings › About too). Signing needs the repository secret `TAURI_SIGNING_PRIVATE_KEY`, the private half of the `pubkey` in `tauri.conf.json`. Arch builds from the PKGBUILD are told about new versions but update through `makepkg`.
@@ -223,14 +237,16 @@ Releases come from GitHub Actions: push an annotated tag such as `v1.2.0` and `.
 <summary><b>Repository layout</b></summary>
 
 ```text
-app/ui/             interface (HTML, CSS, JS; fonts bundled)
-app/src-tauri/      Rust core: engine manager, installer, hardware, profiles, saving
-engines/            Python workers, one per engine
-scripts/            WSL scripts for the Fish S2 Pro server
-packaging/arch/     PKGBUILD
-docs/               design notes and README assets
-design/             the clickable design mockup
-tui/, tts-tui.py    the original terminal app (superseded by app/)
+app/ui/                 interface (HTML, CSS, JS; fonts bundled)
+app/src-tauri/          Rust core: engine manager, installer, hardware, profiles, saving, remote access
+engines/                Python workers, one per engine
+scripts/                WSL scripts for the Fish S2 Pro server
+packaging/arch/         PKGBUILD
+docs/                   design notes and README assets
+design/                 the clickable design mockup
+tui/, tts-tui.py        the original terminal app (superseded by app/)
+NOTICE                  credits and licenses of the engines Mimic downloads
+THIRD-PARTY-NOTICES.md  licenses of the Rust crates built into the app
 ```
 
 </details>
@@ -253,7 +269,7 @@ Mimic clones voices, so it can be misused. Clone your own voice, or someone else
 
 ## Privacy
 
-Mimic has no accounts and no telemetry. Your recordings, clips, voice profiles and takes stay on your computer. It connects to the internet only to check GitHub for a new version when it starts, to download engines you ask for (PyPI, the PyTorch index and Hugging Face), and, when you turn sharing on, through Tailscale. Those services see the usual request details, such as your IP address.
+Mimic has no accounts and no telemetry. Your recordings, clips, voice profiles and takes stay on your computer, and on the devices you share Mimic with if you turn sharing on. It connects to the internet only to check GitHub for a new version when it starts, to download engines you ask for (PyPI, the PyTorch index and Hugging Face), and, when you turn sharing on, through Tailscale. Those services see the usual request details, such as your IP address.
 
 ## License
 
