@@ -1,6 +1,7 @@
 [package]
 name = "mimic"
 version = "0.1.0"
+license = "MIT"
 description = "Local voice cloning"
 edition = "2021"
 
@@ -17,6 +18,8 @@ hound = "3"
 sysinfo = "0.37"
 ureq = { version = "2", features = ["json"] }
 base64 = "0.22"
+getrandom = "0.2"
+if-addrs = "0.15.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

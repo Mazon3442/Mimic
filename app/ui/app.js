@@ -1,6 +1,21 @@
-// Mimic UI. Talks to the Rust core through Tauri commands and events.
-const { invoke, convertFileSrc } = window.__TAURI__.core;
-const { listen } = window.__TAURI__.event;
+// Mimic UI. Talks to the Rust core through Tauri commands and events. Opened in a browser on another device
+// (Settings › Use from another device), it sends the same commands and gets the same events over HTTP (remote.rs).
+const REMOTE = !window.__TAURI__;
+const stream = REMOTE ? new EventSource("/api/events") : null;
+const invoke = REMOTE
+  ? async (cmd, args = {}) => {
+      const r = await fetch(`/api/${cmd}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(args) });
+      if (r.status === 401) { location.reload(); throw "This link was replaced. Open the new link from Mimic."; }
+      const v = await r.json().catch(() => ({ error: `The PC running Mimic didn't answer (${r.status}).` }));
+      if ("error" in v) throw v.error;
+      return v.ok;
+    }
+  : window.__TAURI__.core.invoke;
+// The window's drag-and-drop events don't exist in a browser; it uses the page's own drop events instead.
+const listen = REMOTE
+  ? (name, cb) => { if (!name.startsWith("tauri://")) stream.addEventListener(name, e => cb({ payload: JSON.parse(e.data) })); }
+  : window.__TAURI__.event.listen;
+const fileSrc = REMOTE ? path => `/api/file?path=${encodeURIComponent(path)}` : window.__TAURI__.core.convertFileSrc;
 
 // Script errors and key actions go to logs/ui.log, since a desktop window has no visible console.
 const trace = message => invoke("ui_error", { message });
@@ -16,7 +31,7 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": 
 const ENGINES = {
   // gb: VRAM on a GPU (null = no GPU support). cpuGb: RAM when running on the CPU (null = too heavy for a CPU).
   // Measured on an RTX 5070 Ti and, for cpuGb, on a 16-thread CPU with the GPU hidden.
-  kitten:     { name: "Kitten", full: "KittenTTS 2", gb: 8.8, cpuGb: 14.5, transcript: false, license: "open", real: "about 20 s", available: true,
+  kitten:     { name: "Kitten", full: "KittenTTS 2", gb: 8.8, cpuGb: 14.5, transcript: false, license: "Stellon Labs Community", credit: "Powered by Stellon Labs", real: "about 20 s", available: true,
                 download: "about 1 GB model + PyTorch", note: "Clones from a clip alone. About 4.7 GB VRAM with built-in voices.",
                 tag: t => `<${t}>`, has: ["laugh", "sigh", "breath", "pause"] },
   breeze:     { name: "Breeze", full: "Breeze TTS 2", gb: 8.1, cpuGb: null, transcript: true, license: "non-commercial", real: "35 to 40 s", available: true,
@@ -291,7 +306,7 @@ const currentSettings = () => ({ engine: state.engine, kittenStyle: state.kitten
 const sameSettings = (a, b) => a.engine === b.engine && a.kittenStyle === b.kittenStyle && a.breezeMode === b.breezeMode && a.seed === b.seed;
 function describe(d) {
   const extra = d.engine === "kitten" ? ` · ${d.kittenStyle}` : d.engine === "breeze" ? ` · ${d.breezeMode}` : "";
-  return `${ENGINES[d.engine]?.name || d.engine}${extra} · seed ${d.seed}`;
+  return escapeHtml(`${ENGINES[d.engine]?.name || d.engine}${extra} · seed ${d.seed}`); // profile fields can come from another device
 }
 function selectProfile(id) {
   state.voice = id;
@@ -368,10 +383,13 @@ async function transcribe(v) {
   }
   renderVoices(); renderPreflight();
 }
-// With a path (dropped files, test runs) the clip is imported directly; without one, a file picker opens.
-async function importClip(path) {
+// With a path (dropped files, test runs) or a File (in a browser) the clip is imported directly; without one, a file picker opens.
+async function importClip(src) {
+  if (!(await consented())) return;
   try {
-    const p = typeof path === "string" ? await invoke("import_path", { path }) : await invoke("import_clip");
+    if (REMOTE && !src) [src] = await pickFiles();
+    if (REMOTE && !src) return;
+    const p = src instanceof File ? await uploadClip(src) : typeof src === "string" ? await invoke("import_path", { path: src }) : await invoke("import_clip");
     if (!p) return;
     replaceProfile(p); selectProfile(p.id);
     $("#pname")?.select();
@@ -388,6 +406,31 @@ listen("tauri://drag-drop", async ({ payload }) => {
   if (clips.length) closeNewVoice();
   for (const path of clips) await importClip(path);
 });
+// In a browser: a file picker, uploads, and the page's own drop events.
+function pickFiles() {
+  return new Promise(done => {
+    const input = Object.assign(document.createElement("input"), { type: "file", accept: "audio/*,video/mp4" });
+    input.onchange = () => done([...input.files]); input.oncancel = () => done([]);
+    input.click();
+  });
+}
+async function uploadClip(file) {
+  log(`Sending ${file.name} to the PC running Mimic…`);
+  const r = await fetch(`/api/upload?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+  const v = await r.json().catch(() => ({ error: `Upload failed (${r.status}).` }));
+  if ("error" in v) throw v.error;
+  return v.ok;
+}
+if (REMOTE) {
+  addEventListener("dragover", e => { e.preventDefault(); document.body.classList.toggle("dropping", [...e.dataTransfer.items].some(i => i.kind === "file")); });
+  addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("dropping"); });
+  addEventListener("drop", async e => {
+    e.preventDefault(); document.body.classList.remove("dropping");
+    const clips = [...e.dataTransfer.files].filter(f => AUDIO.test(f.name));
+    if (clips.length) closeNewVoice();
+    for (const f of clips) await importClip(f);
+  });
+}
 
 // The one way in to cloning: record a clip or bring a file.
 function openNewVoice() { $("#newVoiceDlg").classList.add("open"); $("#nvRecord").focus(); }
@@ -652,7 +695,7 @@ function renderTakes(revealId) {
         <div class="take-actions">
           <button class="btn icon" data-act="play" title="${player.key === t.id && !audio.paused ? "Pause" : "Play"} (Space)" aria-label="Play or pause">${player.key === t.id && !audio.paused ? ICON.pause : ICON.play}</button>
           <button class="btn small" data-act="save" title="Ctrl S" ${t.saved ? "disabled" : ""}>${t.saved ? "Saved" : "Save"}</button>
-          <button class="btn small" data-act="saveas" title="Ctrl Shift S">Save as…</button>
+          ${REMOTE ? "" : `<button class="btn small" data-act="saveas" title="Ctrl Shift S">Save as…</button>`}
           <button class="btn icon" data-act="again" title="Redo with a new seed" aria-label="Redo with a new seed" ${t.design ? "disabled" : ""}>${ICON.redo}</button>
           <button class="btn small" data-act="delete">Delete</button>
         </div>`;
@@ -675,6 +718,14 @@ function selectTake(id) {
 }
 async function saveTake(t, as) {
   if (!t || t.pending) return;
+  if (REMOTE) {
+    // The take comes to this device as a download, converted to the format in Settings.
+    const a = Object.assign(document.createElement("a"), { href: `/api/download?path=${encodeURIComponent(t.path)}&name=${encodeURIComponent(fileStem(t))}`, download: "" });
+    document.body.append(a); a.click(); a.remove();
+    t.saved = `Downloaded to this device as ${fileStem(t)}.${(prefs.format || "WAV").toLowerCase()}`;
+    log(t.saved); renderTakes();
+    return;
+  }
   if (!as && t.saved) return;
   try {
     const path = await invoke(as ? "save_take_as" : "save_take", { path: t.path, name: fileStem(t) });
@@ -706,7 +757,7 @@ const player = { key: null, path: null };
 async function applyOutput() { if (prefs.output && audio.setSinkId) { try { await audio.setSinkId(prefs.output); } catch { /* device gone: keep default */ } } }
 function playPath(path, key, from = 0) {
   if (player.key === key && !audio.paused) { audio.pause(); renderTakes(); return; }
-  if (player.key !== key) { audio.src = convertFileSrc(path); player.key = key; player.path = path; }
+  if (player.key !== key) { audio.src = fileSrc(path); player.key = key; player.path = path; }
   if (from) audio.currentTime = from * (audio.duration || 0);
   audio.play().catch(e => log(`Can't play: ${e.message}`, true));
   renderTakes(); tick();
@@ -769,6 +820,21 @@ function cancel() { if (!state.busy) return; state.cancelling = true; renderTake
 
 // ---------- recording ----------
 let rec = null;
+// Before the first clone (record, import, drop or upload): voices need their owner's permission. Asked once.
+function consented() {
+  if (prefs.consent) return Promise.resolve(true);
+  return new Promise(done => {
+    const finish = ok => {
+      $("#consentDlg").classList.remove("open");
+      if (ok) { prefs.consent = new Date().toISOString().slice(0, 10); persistPrefs(); }
+      done(ok);
+    };
+    $("#ccOk").onclick = () => finish(true);
+    $("#ccCancel").onclick = () => finish(false);
+    $("#consentDlg").onkeydown = e => { if (e.key === "Escape") { e.stopPropagation(); finish(false); } };
+    $("#consentDlg").classList.add("open"); $("#ccOk").focus();
+  });
+}
 // The passage starts with the reader's name, so the clip is natural speech ("Hey, it's Mason.") and the name becomes the profile's.
 function remembered(key) { try { return localStorage.getItem(key) || ""; } catch { return ""; } }
 function remember(key, value) { try { localStorage.setItem(key, value); } catch { /* storage off: just not remembered */ } }
@@ -779,7 +845,8 @@ function renderPassageName() {
 }
 // What the reader actually says: numbers as words ("6:30" is read "six thirty"), so the transcript matches the audio.
 const spokenPassage = () => [...$("#passage").childNodes].map(n => n.dataset?.say ?? n.textContent).join("").replace(/\s+/g, " ").trim();
-function openRecorder() {
+async function openRecorder() {
+  if (!(await consented())) return;
   $("#recName").value = remembered("recName"); renderPassageName();
   $("#recorder").classList.add("open");
   ($("#recName").value ? $("#recToggle") : $("#recName")).focus();
@@ -791,6 +858,7 @@ function closeRecorder() {
 }
 async function toggleRecord() {
   if (!rec) {
+    if (!navigator.mediaDevices) { log("Browsers only allow the microphone over HTTPS. On the PC running Mimic, share through Tailscale to record from this device.", true); return; }
     if (!$("#recName").value.trim()) { $(".rec-name").classList.add("missing"); $("#recName").focus(); log("Type the name you'll say first: the passage starts with it.", true); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: prefs.mic ? { exact: prefs.mic } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
@@ -867,7 +935,7 @@ function renderEngines() {
     else if (stale) action = `<button class="btn small" data-install="${id}" title="Download PyTorch for the ${DEVICE_NAME[device]} into this engine">Get ${DEVICE_NAME[device]} build</button>`;
     else if (e.download && managed[id]) action = `<button class="btn small" data-remove="${id}">Remove</button>`;
     else if (e.download && !installed[id]) action = `<button class="btn small" data-install="${id}" ${f.ok ? "" : "disabled"}>Download</button>`;
-    return `<div class="eng-row"><div><div class="n">${e.full}</div><div class="sub">${e.license} license${e.download && !installed[id] ? ` · ${e.download}` : ""}</div></div>
+    return `<div class="eng-row"><div><div class="n">${e.full}</div><div class="sub">${e.license} license${e.credit ? ` · ${e.credit}` : ""}${e.download && !installed[id] ? ` · ${e.download}` : ""}</div></div>
       <div><div>${memText(id)}</div><div class="sub">${clone}</div></div><div class="fit ${cls}">${escapeHtml(fitText)}</div><div class="row">${pin}${action}</div></div>`;
   }).join("");
   const stt = installing.stt ? `<span class="fit busy">${escapeHtml(installing.stt)}</span>`
@@ -908,6 +976,8 @@ listen("install", ({ payload }) => {
 
 // ---------- settings ----------
 async function persistPrefs() {
+  // A browser's microphone and speakers are its own; the PC running Mimic keeps its choices.
+  if (REMOTE) { remember("mic", prefs.mic || ""); remember("output", prefs.output || ""); }
   try { installed = await invoke("save_settings", { settings: prefs }); } catch (e) { log(String(e), true); }
 }
 const idleMinutes = () => ({ "5 minutes": 5, "10 minutes": 10, "30 minutes": 30 }[prefs.idle] ?? null);
@@ -970,12 +1040,12 @@ function renderSettings() {
         <span>Save take / Save as</span><kbd>Ctrl S · Ctrl Shift S</kbd><span>Jump to a take</span><kbd>1-9 · J · K</kbd>
         <span>Blind comparison</span><kbd>B</kbd><span>Stop playback or cancel a take</span><kbd>Esc</kbd><span>Settings</span><kbd>Ctrl ,</kbd></div>`) +
     section("Saving takes",
-      row("Save folder", "Where Save puts takes. Save as… asks every time.", SET.path("saveDir", "Choose where Save puts takes")) +
+      (REMOTE ? "" : row("Save folder", "Where Save puts takes. Save as… asks every time.", SET.path("saveDir", "Choose where Save puts takes"))) +
       row("File names", "", SET.sel("names", [["voice-engine-take", "Mason - Breeze - take 4"], ["date-voice-take", `${date} Mason take 4`], ["take", "Take 4"]])) +
       row("Format", "WAV keeps full quality. MP3 is smaller.", SET.seg("format", ["WAV", "FLAC", "MP3"])) +
       row("Warn about unsaved takes when closing", "", SET.sw("warnUnsaved"))) +
     section("Playback",
-      row("Output device", "", SET.sel("output", [["", "Windows default"], ...devices.out])) +
+      row("Output device", "", SET.sel("output", [["", REMOTE ? "Default" : "Windows default"], ...devices.out])) +
       row("Play each take when it's ready", "", SET.sw("autoplay"))) +
     section("Engines and memory",
       row("Run engines on", `Automatic picks the ${DEVICE_NAME[hw.accel || "cpu"]} on this PC${hw.gpu ? ` (${escapeHtml(hw.gpu)})` : ""}. `
@@ -984,18 +1054,60 @@ function renderSettings() {
         SET.seg("device", hw.gpuAccel ? ["Automatic", "GPU", "CPU"] : ["Automatic", "CPU"])) +
       row("Unload the engine when idle for", "Frees memory for games and other apps.", SET.sel("idle", pairs(["5 minutes", "10 minutes", "30 minutes", "Never"]))) +
       row("Load the default engine when Mimic starts", "The first take comes faster, but memory is used right away.", SET.sw("preload")) +
-      row("Engines folder", "Model files and their Python environments.", SET.path("enginesDir", "Choose the engines folder")) +
-      row("Hugging Face token", "Only for engines that need a free account (NeuTTS). Create a read token at huggingface.co › Settings › Access Tokens. It stays on this PC.", SET.secret("hfToken", "hf_…")) +
+      (REMOTE ? "" : row("Engines folder", "Model files and their Python environments.", SET.path("enginesDir", "Choose the engines folder")) +
+        row("Hugging Face token", "Only for engines that need a free account (NeuTTS). Create a read token at huggingface.co › Settings › Access Tokens. It stays on this PC.", SET.secret("hfToken", "hf_…"))) +
       row("Engines", "", `<button class="btn small" data-open="engines">Open</button>`)) +
     section("Recording and transcripts",
-      row("Microphone", "", SET.sel("mic", [["", "Windows default"], ...devices.in])) +
+      row("Microphone", "", SET.sel("mic", [["", REMOTE ? "Default" : "Windows default"], ...devices.in])) +
       row("Speech-to-text model", "Bigger is more accurate, smaller is faster. Runs on the CPU.", SET.sel("stt", pairs(["Automatic", "tiny", "base", "small", "medium"]))) +
       row("Transcript language", "", SET.sel("lang", [["English", "English"], ["Auto", "Detect automatically"]]))) +
-    section("About",
-      row(`Mimic ${escapeHtml(version)}`, update ? `Version ${escapeHtml(update.version)} is available.` : "Mimic checks GitHub for a new version each time it starts.",
-        update ? `<button class="btn small" data-update="open">Install ${escapeHtml(update.version)}</button>` : `<button class="btn small" data-update="check">Check for updates</button>`));
+    (REMOTE ? "" : shareSection() + section("About",
+      row(`Mimic ${escapeHtml(version)}`, (update ? `Version ${escapeHtml(update.version)} is available.` : "Mimic checks GitHub for a new version each time it starts.")
+        + " MIT license. KittenTTS is powered by Stellon Labs; every engine keeps its own license (see Engines).",
+        update ? `<button class="btn small" data-update="open">Install ${escapeHtml(update.version)}</button>` : `<button class="btn small" data-update="check">Check for updates</button>`)));
 }
-async function openSettings() { await loadDevices(); renderSettings(); $("#settingsDlg").classList.add("open"); }
+
+// ---------- use from another device ----------
+// Nothing is shared until one of these buttons is pressed. The link carries a secret; "New link" replaces it.
+let share = { on: false };
+function shareSection() {
+  if (!share.on) {
+    return section("Use from another device",
+      row("Share this PC's Mimic", "Open Mimic in a browser on a laptop or phone, with this PC's GPU doing the work. Nothing is shared until you start it, and it stops when Mimic closes.",
+        `<button class="btn small" data-share="lan" ${share.busy ? "disabled" : ""}>This network</button><button class="btn small" data-share="tailscale" ${share.busy ? "disabled" : ""}>Anywhere (Tailscale)</button>`) +
+      `<p class="share-note">${share.busy ? escapeHtml(share.busy) : "<b>This network</b> works on the same Wi-Fi, but browsers only allow the microphone over HTTPS, so record on this PC. <b>Anywhere</b> needs Tailscale signed in on both devices and gives an HTTPS link, so recording works there too."}</p>`);
+  }
+  const where = share.mode === "lan" ? "on this network" : "through Tailscale";
+  const who = share.devices === 1 ? "1 device is connected" : `${share.devices || "No"} devices are connected`;
+  return section("Use from another device",
+    row(`Sharing ${where}`, `${who}. Anyone with the link can use Mimic on this PC, so send it only to your own devices.`, `<button class="btn small" data-share="stop">Stop sharing</button>`) +
+    `<div class="share-link"><input readonly value="${escapeHtml(share.url)}" aria-label="Link"><button class="btn small" data-share="copy">Copy</button><button class="btn small" data-share="new" title="The old link stops working">New link</button></div>`);
+}
+async function shareAction(act) {
+  try {
+    if (act === "copy") {
+      await navigator.clipboard.writeText(share.url).catch(() => { $(".share-link input").select(); document.execCommand("copy"); });
+      return log("Copied the link. Open it on your other device.");
+    }
+    if (act === "lan" || act === "tailscale") {
+      share = { on: false, busy: act === "lan" ? "Starting…" : "Setting up Tailscale…" }; renderSettings();
+      share = await invoke("remote_start", { mode: act });
+      log("Sharing is on. Copy the link and open it on your other device.");
+    }
+    if (act === "stop") { share = await invoke("remote_stop"); log("Stopped sharing."); }
+    if (act === "new") { share = await invoke("remote_new_link"); log("Made a new link. The old one no longer works."); }
+  } catch (e) {
+    share = await invoke("remote_status");
+    log(String(e), true);
+  }
+  renderSettings();
+}
+listen("remote", ({ payload }) => { share = payload; if ($("#settingsDlg").classList.contains("open")) renderSettings(); });
+async function openSettings() {
+  await loadDevices();
+  if (!REMOTE) share = await invoke("remote_status");
+  renderSettings(); $("#settingsDlg").classList.add("open");
+}
 function closeSettings() { $("#settingsDlg").classList.remove("open"); }
 $("#settingsBody").addEventListener("click", async e => {
   const segBtn = e.target.closest(".seg[data-pref] button");
@@ -1004,6 +1116,7 @@ $("#settingsBody").addEventListener("click", async e => {
   const ch = e.target.closest("[data-change]");
   if (ch) { const p = await invoke("pick_folder", { title: ch.dataset.title }); if (p) { prefs[ch.dataset.change] = p; afterPref(ch.dataset.change); } return; }
   const op = e.target.closest("[data-open]"); if (op) { closeSettings(); op.dataset.open === "palette" ? openPalette() : openEngines(); }
+  const sh = e.target.closest("[data-share]"); if (sh) return shareAction(sh.dataset.share);
   const up = e.target.closest("[data-update]");
   if (up) {
     if (up.dataset.update === "open") { closeSettings(); return openUpdate(); }
@@ -1227,9 +1340,11 @@ listen("update-progress", ({ payload }) => {
   $("#upStatus").textContent = payload.done >= payload.total ? "Installing…" : `Downloading… ${Math.round(payload.done / payload.total * 100)}%`;
 });
 
-// Ask before closing with unsaved takes.
-window.__TAURI__.window.getCurrentWindow().onCloseRequested(e => {
-  const unsaved = takes.filter(t => !t.pending && !t.saved).length;
+// Ask before closing with unsaved takes (a browser shows its own "leave this page?" prompt).
+const unsavedCount = () => takes.filter(t => !t.pending && !t.saved).length;
+if (REMOTE) addEventListener("beforeunload", e => { if (prefs.warnUnsaved && unsavedCount()) e.preventDefault(); });
+else window.__TAURI__.window.getCurrentWindow().onCloseRequested(e => {
+  const unsaved = unsavedCount();
   if (prefs.warnUnsaved && unsaved && !confirm(`${unsaved} take${unsaved > 1 ? "s are" : " is"} not saved and will be lost. Close Mimic anyway?`)) e.preventDefault();
 });
 
@@ -1237,8 +1352,9 @@ window.__TAURI__.window.getCurrentWindow().onCloseRequested(e => {
 let version = "";
 async function start() {
   const b = await invoke("bootstrap");
-  version = await window.__TAURI__.app.getVersion();
+  version = b.version || "";
   prefs = b.settings; profiles = b.profiles; installed = b.installed; hw = b.hardware;
+  if (REMOTE) { prefs.mic = remembered("mic"); prefs.output = remembered("output"); document.title = "Mimic (remote)"; }
   managed = b.managed || {}; device = b.device || "cpu"; platform = b.platform || "windows"; caelestia = b.caelestia || null;
   if (b.resident) { state.resident = b.resident; state.engineState[b.resident] = "warm"; }
   state.voice = voiceById(prefs.lastProfile) ? prefs.lastProfile : profiles[0]?.id;
@@ -1253,12 +1369,14 @@ async function start() {
   const ready = ALL.filter(usable).map(id => ENGINES[id].name);
   // A GPU that could run models with one more install (driver, runtime, group) is worth saying at startup.
   const gpuFix = hw.fix ? ` ${hw.note} ${hw.fix}` : "";
-  log(ready.length ? `Ready. Engines on this PC: ${ready.join(", ")}.${gpuFix}` : `No engines found. Check the engines folder in Settings.${gpuFix}`, !ready.length);
+  const where = REMOTE ? `Connected to the PC running Mimic${hw.gpu ? ` (${hw.gpu})` : ""}. Engines there` : "Engines on this PC";
+  log(ready.length ? `Ready. ${where}: ${ready.join(", ")}.${gpuFix}` : `No engines found. Check the engines folder in Settings.${gpuFix}`, !ready.length);
   if (prefs.preload && usable(state.engine) && !state.resident) invoke("preload", { engine: state.engine }).catch(e => log(String(e), true));
 }
 // Scripted test runs (MIMIC_TEST="engine:kitten;voice:Bruno;generate;save") drive the UI from inside,
 // so testing never has to send keystrokes to the desktop.
 async function selfTest(script) {
+  prefs.consent ||= "test run";
   for (const step of script.split(";").map(s => s.trim()).filter(Boolean)) {
     const [cmd, arg] = step.split(/:(.*)/s);
     trace(`test: ${step}`);
@@ -1286,13 +1404,15 @@ async function selfTest(script) {
     else if (cmd === "control") { const [k, v] = arg.split("="); setControl(state.engine, k, v === "" ? null : parseFloat(v)); persistPrefs(); renderControls(); }
     else if (cmd === "update" || cmd === "update-pacman") { update = { version: "9.9.9", current: version, notes: (arg || "").replaceAll("|", "\n"), packageManager: cmd === "update-pacman" ? "pacman" : null }; $("#updateBtn").hidden = false; $("#updateBtn").textContent = "Update to 9.9.9"; openUpdate(); } // debug builds never see a real one
     else if (cmd === "settings") await openSettings();
+    else if (cmd === "share") await shareAction(arg);
     else if (cmd === "scroll") [...$$(".set-row .t")].find(t => t.textContent === arg)?.scrollIntoView({ block: "center" });
-    else if (cmd === "recorder") { openRecorder(); if (arg) { $("#recName").value = arg; renderPassageName(); } }
+    else if (cmd === "recorder") { await openRecorder(); if (arg) { $("#recName").value = arg; renderPassageName(); } }
+    else if (cmd === "consent") prefs.consent = arg; // "consent:" shows the notice again
     else if (cmd === "wait") await new Promise(r => setTimeout(r, +arg || 1000));
   }
   trace("test: done");
 }
 start().then(async () => {
   const s = await invoke("test_script");
-  if (s) selfTest(s); else checkUpdate(true);
+  if (s) selfTest(s); else if (!REMOTE) checkUpdate(true);
 }).catch(e => { hideSplash(); log(`Mimic couldn't start: ${e}`, true); });

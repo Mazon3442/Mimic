@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/**", "$APPLOCALDATA/**"]
@@ -47,7 +47,10 @@
     },
     "resources": {
       "../../engines/": "engines/",
-      "../../scripts/": "scripts/"
+      "../../scripts/": "scripts/",
+      "../../LICENSE": "LICENSE",
+      "../../NOTICE": "NOTICE",
+      "../../THIRD-PARTY-NOTICES.md": "THIRD-PARTY-NOTICES.md"
     }
   }
 }

@@ -7,6 +7,7 @@ mod engines;
 mod fish;
 mod hw;
 mod install;
+mod remote;
 mod store;
 mod worker;
 
@@ -38,6 +39,7 @@ struct App {
     engines: Manager,
     stt: Mutex<Option<(String, Worker)>>,
     hw: Mutex<hw::Hardware>,
+    remote: remote::Remote,
 }
 
 type Shared = Arc<App>;
@@ -114,7 +116,7 @@ fn new_profile(name: &str, clip: &Path, transcript: &str, tx: &str, app: &App) -
 // ---------------------------------------------------------------- commands
 
 #[tauri::command]
-fn bootstrap(app: State<'_, Shared>) -> Value {
+fn bootstrap(handle: AppHandle, app: State<'_, Shared>) -> Value {
     // Copy everything out first: locks taken inside json!() would be held until the end of it.
     let s = app.settings.lock().unwrap().clone();
     let profiles = app.profiles.lock().unwrap().clone();
@@ -131,6 +133,8 @@ fn bootstrap(app: State<'_, Shared>) -> Value {
         "platform": std::env::consts::OS,
         "caelestia": caelestia::read(),
         "managed": managed(Path::new(&s.engines_dir)),
+        "version": handle.package_info().version.to_string(),
+        "remote": false,
     })
 }
 
@@ -151,7 +155,7 @@ fn save_profile(app: State<'_, Shared>, profile: Profile) -> Result<Profile, Str
 fn delete_profile(app: State<'_, Shared>, id: String) -> Result<(), String> {
     let mut all = app.profiles.lock().unwrap();
     if let Some(p) = all.iter().find(|p| p.id == id) {
-        if !p.clip.is_empty() && Path::new(&p.clip).starts_with(&app.dirs.voices) {
+        if !p.clip.is_empty() && inside(Path::new(&p.clip), &app.dirs.voices) {
             let _ = std::fs::remove_file(&p.clip);
         }
     }
@@ -297,13 +301,18 @@ async fn preload(handle: AppHandle, app: State<'_, Shared>, engine: String) -> R
     blocking(move || app.engines.preload(&handle, &app.paths(), &engine)).await
 }
 
-/// Copy (WAV) or convert (FLAC/MP3) a take from the session cache to `dst`.
+/// Saved takes say in their own metadata that they're synthetic speech (WAV INFO, FLAC Vorbis comment, MP3 ID3),
+/// so other software can tell. The EU AI Act asks for machine-readable marking of AI-generated audio.
+const AI_MARK: [&str; 4] = ["-metadata", "comment=AI-generated speech, made with Mimic", "-metadata", "encoded_by=Mimic"];
+
+/// Copy (WAV) or convert (FLAC/MP3) a take from the session cache to `dst`, marked as AI-generated.
 fn export(src: &Path, dst: &Path) -> Result<(), String> {
-    match dst.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
-        Some("mp3") => audio::ffmpeg(src, &["-codec:a", "libmp3lame", "-q:a", "2"], dst),
-        Some("flac") => audio::ffmpeg(src, &[], dst),
-        _ => std::fs::copy(src, dst).map(|_| ()).map_err(|e| format!("can't save: {e}")),
-    }
+    let codec: &[&str] = match dst.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("mp3") => &["-codec:a", "libmp3lame", "-q:a", "2"],
+        Some("flac") => &[],
+        _ => &["-codec:a", "copy"],
+    };
+    audio::ffmpeg(src, &[codec, &AI_MARK[..]].concat(), dst)
 }
 
 fn unique(dir: &Path, stem: &str, ext: &str) -> PathBuf {
@@ -355,9 +364,14 @@ async fn save_take_as(handle: AppHandle, app: State<'_, Shared>, path: String, n
 
 #[tauri::command]
 fn delete_take(app: State<'_, Shared>, path: String) {
-    if Path::new(&path).starts_with(&app.dirs.takes) {
+    if inside(Path::new(&path), &app.dirs.takes) {
         let _ = std::fs::remove_file(path);
     }
+}
+
+/// Whether `path` really is in `dir`, after resolving ".." and links (a plain prefix check would let "takes/../x" out).
+fn inside(path: &Path, dir: &Path) -> bool {
+    matches!((path.canonicalize(), dir.canonicalize()), (Ok(p), Ok(d)) if p.starts_with(&d))
 }
 
 #[tauri::command]
@@ -420,6 +434,89 @@ fn reveal(path: String) {
     {
         let dir = Path::new(&path).parent().map(Path::to_path_buf).unwrap_or_default();
         let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+    }
+}
+
+// ---------------------------------------------------------------- remote access
+
+#[tauri::command]
+fn remote_status(app: State<'_, Shared>) -> Value {
+    app.remote.status(&app)
+}
+
+#[tauri::command]
+async fn remote_start(handle: AppHandle, mode: String) -> Result<Value, String> {
+    blocking(move || remote::start(&handle, &mode)).await
+}
+
+#[tauri::command]
+async fn remote_stop(handle: AppHandle) -> Result<Value, String> {
+    blocking(move || Ok(remote::stop(&handle))).await
+}
+
+#[tauri::command]
+fn remote_new_link(handle: AppHandle) -> Result<Value, String> {
+    remote::new_link(&handle)
+}
+
+/// Runs a UI command for a browser on another device. Commands that open windows on this PC or take its file
+/// paths aren't offered; remote.rs has browser versions of those (upload, download).
+fn remote_call(h: &AppHandle, cmd: &str, args: Value) -> Result<Value, String> {
+    use tauri::async_runtime::block_on;
+    fn arg<T: serde::de::DeserializeOwned>(args: &Value, k: &str) -> Result<T, String> {
+        serde_json::from_value(args.get(k).cloned().unwrap_or(Value::Null)).map_err(|e| format!("{k}: {e}"))
+    }
+    fn to<T: serde::Serialize>(r: Result<T, String>) -> Result<Value, String> {
+        r.and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
+    }
+    let app = || h.state::<Shared>();
+    match cmd {
+        "bootstrap" => {
+            let mut b = bootstrap(h.clone(), app());
+            b["remote"] = true.into();
+            b["settings"]["hfToken"] = "".into(); // the host's secret stays on the host
+            Ok(b)
+        }
+        "save_settings" => {
+            // Folders, the token and audio devices belong to the host PC, so a browser can't change them.
+            let mut s: Settings = arg(&args, "settings")?;
+            let host = app().settings.lock().unwrap().clone();
+            (s.engines_dir, s.save_dir, s.hf_token, s.mic, s.output) = (host.engines_dir, host.save_dir, host.hf_token, host.mic, host.output);
+            to(save_settings(app(), s))
+        }
+        "save_profile" => {
+            // A browser edits names, transcripts and defaults, never which file is the clip: that would let it read any file here.
+            let mut p: Profile = arg(&args, "profile")?;
+            let host = app().profile(&p.id)?;
+            (p.clip, p.builtin) = (host.clip, host.builtin);
+            to(save_profile(app(), p))
+        }
+        "delete_profile" => to(delete_profile(app(), arg(&args, "id")?)),
+        "save_recording" => to(block_on(save_recording(app(), arg(&args, "wav")?, arg(&args, "transcript")?, arg(&args, "name")?))),
+        "transcribe" => to(block_on(transcribe(app(), arg(&args, "id")?))),
+        "peaks" => {
+            let path = remote::check_path(&app(), &arg::<String>(&args, "path")?)?;
+            to(block_on(peaks(path.to_string_lossy().to_string(), arg(&args, "bins")?)))
+        }
+        "generate" => to(block_on(generate(h.clone(), app(), arg(&args, "req")?))),
+        "cancel" => {
+            cancel(app());
+            Ok(Value::Null)
+        }
+        "unload" => to(block_on(unload(h.clone(), app()))),
+        "preload" => to(block_on(preload(h.clone(), app(), arg(&args, "engine")?))),
+        "delete_take" => {
+            delete_take(app(), arg(&args, "path")?);
+            Ok(Value::Null)
+        }
+        "install_engine" => to(block_on(install_engine(h.clone(), app(), arg(&args, "id")?))),
+        "remove_engine" => to(block_on(remove_engine(h.clone(), app(), arg(&args, "id")?))),
+        "ui_error" => {
+            ui_error(app(), format!("[remote] {}", arg::<String>(&args, "message")?));
+            Ok(Value::Null)
+        }
+        "test_script" => Ok("".into()),
+        other => Err(format!("{other} only works on the PC running Mimic.")),
     }
 }
 
@@ -577,8 +674,10 @@ fn main() {
                 engines: Manager::default(),
                 stt: Mutex::new(None),
                 hw: Mutex::new(first),
+                remote: remote::Remote::default(),
             });
             tauri_app.manage(app.clone());
+            remote::Remote::init(&handle);
 
             // The window starts hidden so test runs can show it without taking focus from whatever the user is doing.
             if let Some(win) = handle.get_webview_window("main") {
@@ -629,17 +728,37 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             bootstrap, save_settings, save_profile, delete_profile, import_clip, save_recording, transcribe,
             peaks, generate, cancel, unload, preload, save_take, save_take_as, delete_take, pick_folder, reveal, ui_error,
-            install_engine, remove_engine, test_script, import_path, check_update, install_update
+            install_engine, remove_engine, test_script, import_path, check_update, install_update,
+            remote_status, remote_start, remote_stop, remote_new_link
         ])
         .build(tauri::generate_context!())
         .expect("error while building Mimic")
         .run(|handle, event| {
             if let RunEvent::Exit = event {
                 if let Some(app) = handle.try_state::<Shared>() {
+                    remote::stop(handle); // also takes Mimic's route out of Tailscale
                     app.engines.unload(handle);
                     *app.stt.lock().unwrap() = None;
                     let _ = std::fs::remove_dir_all(&app.dirs.takes);
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inside_resolves_dot_dot() {
+        let root = std::env::temp_dir().join(format!("mimic-inside-{}", std::process::id()));
+        let takes = root.join("takes");
+        std::fs::create_dir_all(&takes).unwrap();
+        std::fs::write(takes.join("take.wav"), b"x").unwrap();
+        std::fs::write(root.join("secret.txt"), b"x").unwrap();
+        assert!(inside(&takes.join("take.wav"), &takes));
+        assert!(!inside(&takes.join("..").join("secret.txt"), &takes), "a prefix check would have allowed this");
+        assert!(!inside(&takes.join("missing.wav"), &takes));
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

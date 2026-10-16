@@ -1,0 +1,23 @@
+Mimic
+Copyright (c) 2026 Mazon3442. Licensed under the MIT License (see LICENSE).
+
+Mimic downloads and runs third-party voice models and libraries on the user's request. They are not part of
+Mimic's source code and keep their own licenses, which apply to how you use them and what you make with them.
+
+KittenTTS 2
+  This Stellon Labs Model is licensed under the Stellon Labs Community License, Copyright © Stellon Labs Inc. All Rights Reserved
+  Powered by Stellon Labs.
+  License: https://huggingface.co/KittenML/kitten-tts-2 (LICENSE.md, also saved with the model in Mimic's engines folder).
+  Commercial use requires registering with Stellon Labs, and the license ends for organizations above US$1M in
+  annual revenue or funding. Outputs may not be used to train other models.
+
+Qwen3-TTS (Apache License 2.0, Qwen team, Alibaba Cloud)
+Chatterbox Turbo (MIT License, Resemble AI; adds an inaudible watermark to what it generates)
+VoxCPM2 (Apache License 2.0, OpenBMB)
+Audio8 TTS Preview (Apache License 2.0, Audio8)
+NeuTTS Air (Apache License 2.0, Neuphonic)
+Breeze TTS 2 (BreezeBlue Research and Non-Commercial License; set up by hand, not downloaded by Mimic)
+Fish S2 Pro (Fish Audio research license, see its model card; set up by hand, not downloaded by Mimic)
+
+Fonts: IBM Plex Sans (Copyright 2017 IBM Corp.) and Newsreader (Copyright 2020 The Newsreader Project Authors),
+SIL Open Font License 1.1, see app/ui/fonts/OFL.txt.

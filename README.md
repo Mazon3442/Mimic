@@ -34,6 +34,7 @@
 | **One engine in memory** | Switching engines unloads the old one first, and idle engines unload after a set time, so the GPU is free for everything else. |
 | **Nothing saved behind your back** | Takes stay in a temporary cache until you press Save (Ctrl+S) or Save as (Ctrl+Shift+S). WAV, FLAC or MP3. |
 | **Compare engines** | Generate the same line with every engine that fits, optionally blind, and keep the best take. |
+| **Use it from another device** | Share Mimic from Settings and open the link in a browser on your laptop or phone, while this PC's GPU does the work. On your home network, or anywhere through Tailscale. Off until you start it. |
 | **At home on Linux** | Native on Wayland and X11. With [Caelestia](https://github.com/caelestia-dots/shell), Mimic follows your shell's live colors; on Hyprland it drops the title bar. |
 
 <table>
@@ -83,12 +84,12 @@ Only clone voices you have permission to use.
 | **Chatterbox Turbo** | GPU or CPU | 3.4 GB VRAM · 6.0 GB RAM | clip only (over 5 s) | Download in Mimic | MIT |
 | **VoxCPM2** | NVIDIA GPU | 6.9 GB VRAM | clip + transcript | Download in Mimic | Apache 2.0 |
 | **Audio8 TTS Preview 0.6B** | GPU or CPU | 3.6 GB VRAM · 6.1 GB RAM | clip + transcript | Download in Mimic | Apache 2.0 |
-| **KittenTTS 2** | GPU (CPU possible) | 8.8 GB VRAM · 14.5 GB RAM | clip only | Download in Mimic | Stellon Labs Community |
+| **KittenTTS 2** | GPU (CPU possible) | 8.8 GB VRAM · 14.5 GB RAM | clip only | Download in Mimic | Stellon Labs Community² |
 | **NeuTTS Air** | CPU (Linux) | about 1 GB RAM¹ | clip (3–15 s) + transcript | Download in Mimic, needs a free Hugging Face account | Apache 2.0 |
 | **Breeze TTS 2** | NVIDIA GPU | about 8 GB VRAM¹ | clip + transcript | Set up by hand | Non-commercial |
 | **Fish S2 Pro** | NVIDIA GPU, Windows (WSL) | about 15 GB VRAM¹ | clip + transcript | Set up by hand | See model card |
 
-<sub>Qwen, Kitten, Chatterbox, VoxCPM2 and Audio8 figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic.</sub>
+<sub>Qwen, Kitten, Chatterbox, VoxCPM2 and Audio8 figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic. ² KittenTTS is powered by Stellon Labs: free for personal use, research and small businesses (under US$1M revenue and funding, and commercial users must register with Stellon Labs); its outputs may not be used to train other models. Each engine's license applies to what you make with it; Breeze and Fish are non-commercial.</sub>
 
 <div align="center">
 <picture>
@@ -172,6 +173,18 @@ Breeze TTS 2 and Fish S2 Pro are set up by hand: `breeze-env/`, `models/breeze-t
 </details>
 
 <details>
+<summary><b>Use Mimic from another device</b></summary>
+
+Settings › **Use from another device** shares this PC's Mimic with a browser on your laptop or phone: the interface runs there, the engines run here. Nothing is shared until you press a button, and sharing stops when Mimic closes.
+
+- **This network:** a link like `http://192.168.1.20:4777/pair?t=…` for devices on the same Wi-Fi. Mimic listens only on the adapter with a home-network address, so a PC that's also plugged straight into the internet stays closed there; with no home network it refuses and suggests Tailscale. Windows asks once to allow Mimic through the firewall, and the home network has to be set to *Private* in Windows for other devices to reach it. Browsers only allow the microphone over HTTPS, so record voices on this PC (importing and dropping clips works from the other device).
+- **Anywhere (Tailscale):** install [Tailscale](https://tailscale.com/download) on both devices and sign in to the same account. Mimic uses `tailscale serve` to give you an HTTPS link (`https://<this-pc>.<tailnet>.ts.net`) that only your devices can reach, from any network, with recording too. The first time, Tailscale may ask you to turn on HTTPS for your tailnet; Mimic shows the link. On Linux, run `sudo tailscale set --operator=$USER` once so Mimic can set this up.
+- **The link is the key.** It carries a secret that the browser keeps as a cookie. Anyone with the link can use Mimic on this PC, so send it only to your own devices. **New link** replaces the secret and signs out every device that used the old one.
+- In the browser, **Save** downloads the take to that device (in the format from Settings), and imports upload clips from it. Folders, the engines folder, the Hugging Face token and updates stay on this PC.
+
+</details>
+
+<details>
 <summary><b>Keyboard shortcuts</b></summary>
 
 | Action | Keys |
@@ -229,6 +242,18 @@ tui/, tts-tui.py    the original terminal app (superseded by app/)
 - `MIMIC_DATA_DIR=<folder inside the app data folder>` uses a separate set of profiles, settings and takes.
 
 </details>
+
+## Responsible use
+
+Mimic clones voices, so it can be misused. Clone your own voice, or someone else's only with their permission. Using a cloned voice to impersonate, deceive, harass or defraud someone, in robocalls, or in ways that break right-of-publicity or deepfake laws is illegal in many places and is not what Mimic is for. You're responsible for what you make with it.
+
+- Mimic asks you to confirm this once, before your first clone.
+- Takes you save are marked as AI-generated in the file's metadata. When you share synthetic speech, say so.
+- Chatterbox also adds Resemble AI's inaudible watermark to everything it generates.
+
+## Privacy
+
+Mimic has no accounts and no telemetry. Your recordings, clips, voice profiles and takes stay on your computer. It connects to the internet only to check GitHub for a new version when it starts, to download engines you ask for (PyPI, the PyTorch index and Hugging Face), and, when you turn sharing on, through Tailscale. Those services see the usual request details, such as your IP address.
 
 ## License
 

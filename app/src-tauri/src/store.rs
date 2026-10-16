@@ -30,6 +30,8 @@ pub struct Settings {
     pub hf_token: String,
     /// Controls panel values the user changed, per engine (engine -> control -> value). Unset means the engine's default.
     pub controls: BTreeMap<String, BTreeMap<String, f64>>,
+    /// When the user accepted the voice-consent notice (ISO date); empty until then. Asked before the first clone.
+    pub consent: String,
 }
 
 impl Default for Settings {
@@ -54,6 +56,7 @@ impl Default for Settings {
             device: "Automatic".into(),
             hf_token: String::new(),
             controls: BTreeMap::new(),
+            consent: String::new(),
         }
     }
 }
@@ -140,5 +143,18 @@ pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let tmp: PathBuf = path.with_extension("tmp");
     let text = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
     std::fs::write(&tmp, text).map_err(|e| format!("can't write {}: {e}", tmp.display()))?;
+    private(&tmp);
     std::fs::rename(&tmp, path).map_err(|e| format!("can't save {}: {e}", path.display()))
+}
+
+/// Readable by this user only: settings hold the Hugging Face token, and the sharing secret is a password.
+/// (On Windows the app data folder is already private to the user.)
+pub fn private(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }

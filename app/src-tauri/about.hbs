@@ -1,0 +1,15 @@
+# Third-party licenses
+
+Mimic's app is built with these open-source Rust crates. Their licenses and copyright notices follow, as their
+licenses require. The voice models Mimic downloads are not part of the app; see NOTICE for those.
+
+{{#each licenses}}
+## {{name}}
+
+Used by: {{#each used_by}}{{crate.name}} {{crate.version}}{{#unless @last}}, {{/unless}}{{/each}}
+
+```
+{{{text}}}
+```
+
+{{/each}}
