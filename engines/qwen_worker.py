@@ -59,8 +59,11 @@ for line in sys.stdin:
         if "top_k" in controls:
             sampling["top_k"] = int(controls["top_k"])
         started = time.time()
+        # non_streaming_mode: feed the whole script before the reference audio. The library default (False)
+        # interleaves it with the reference frames, which makes the first word drift off the cloned voice.
         wavs, rate = model.generate_voice_clone(text=r["text"], language=r.get("language") or "English",
-                                                voice_clone_prompt=prompts[key], **sampling)
+                                                voice_clone_prompt=prompts[key], non_streaming_mode=True,
+                                                **sampling)
         audio = np.asarray(wavs[0], dtype=np.float32).reshape(-1)
         sf.write(r["output"], audio, rate, subtype="PCM_16")
         send(event="done", output=r["output"], seconds=len(audio) / rate, elapsed=time.time() - started)
