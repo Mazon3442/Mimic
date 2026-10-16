@@ -15,6 +15,12 @@ on:
 permissions:
   contents: write # create the release and upload the packages
 
+# Hosted runners sometimes drop crate downloads ("[55] Failed sending data to the peer ... Connection was reset").
+# Retry harder and use plain HTTP/1.1 connections, which reset far less often than multiplexed HTTP/2 ones.
+env:
+  CARGO_NET_RETRY: 10
+  CARGO_HTTP_MULTIPLEXING: false
+
 jobs:
   windows:
     runs-on: windows-latest
