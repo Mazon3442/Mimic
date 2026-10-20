@@ -32,6 +32,9 @@ target/
 app/src-tauri/gen/
 node_modules/
 
+# Security scan results (can leak secrets/tokens in logs)
+strix_runs/
+
 # Local config / OS
 .env
 .DS_Store
