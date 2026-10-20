@@ -1078,13 +1078,14 @@ function shareSection() {
       row("Share this PC's Mimic", "Open Mimic in a browser on a laptop or phone, with this PC's GPU doing the work. Nothing is shared until you start it, and it stops when Mimic closes.",
         `<button class="btn small" data-share="lan" ${share.busy ? "disabled" : ""}>This network</button><button class="btn small" data-share="tailscale" ${share.busy ? "disabled" : ""}>Anywhere (Tailscale)</button>`) +
       (share.error ? `<p class="share-error" role="alert">${withTailscaleLinks(share.error)}</p>`
-        : `<p class="share-note">${share.busy ? escapeHtml(share.busy) : "<b>This network</b> works on the same Wi-Fi, but browsers only allow the microphone over HTTPS, so record on this PC. <b>Anywhere</b> needs Tailscale signed in on both devices and gives an HTTPS link, so recording works there too."}</p>`) +
+        : `<p class="share-note">${share.busy ? escapeHtml(share.busy) : "<b>This network</b> works on the same Wi-Fi but isn't encrypted: others on that Wi-Fi could see your text and audio, or take over the session. Browsers also only allow the microphone over HTTPS, so record on this PC. <b>Anywhere</b> needs Tailscale signed in on both devices and is encrypted, so it's the one to use on shared Wi-Fi, and recording works there too."}</p>`) +
       tailscaleGuide());
   }
   const where = share.mode === "lan" ? "on this network" : "through Tailscale";
   const who = share.devices === 1 ? "1 device is connected" : `${share.devices || "No"} devices are connected`;
+  const plain = share.mode === "lan" ? " This connection isn't encrypted, so use it only on a Wi-Fi you trust." : "";
   return section("Use from another device",
-    row(`Sharing ${where}`, `${who}. Anyone with the link can use Mimic on this PC, so send it only to your own devices.`, `<button class="btn small" data-share="stop">Stop sharing</button>`) +
+    row(`Sharing ${where}`, `${who}. Anyone with the link can use Mimic on this PC, so send it only to your own devices.${plain}`, `<button class="btn small" data-share="stop">Stop sharing</button>`) +
     `<div class="share-link"><input readonly value="${escapeHtml(share.url)}" aria-label="Link"><button class="btn small" data-share="copy">Copy</button><button class="btn small" data-share="new" title="The old link stops working">New link</button></div>`);
 }
 // Tailscale's pages in an error ("Get it from https://tailscale.com/download") become buttons that open the browser.

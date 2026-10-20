@@ -1,6 +1,7 @@
 //! Remote access: Mimic's own interface served over HTTP, so a browser on another device can use this PC's GPU.
 //! Two ways in: this network (a LAN address), or anywhere through Tailscale (`tailscale serve` adds HTTPS, which
-//! browsers require before they allow the microphone). Off until the user starts it in Settings.
+//! browsers require before they allow the microphone). Off until the user starts it in Settings. On this network
+//! traffic is plain HTTP, so the secret and cookie can be sniffed on that Wi-Fi; the UI says so, and points to Tailscale.
 //!
 //! Every request needs the secret from the pairing link: /pair?t=<secret> stores it as a cookie, and the browser
 //! sends it with everything after (fetch, the event stream, audio). "New link" changes the secret, which signs out

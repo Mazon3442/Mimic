@@ -185,6 +185,7 @@ Settings › **Use from another device** shares this PC's Mimic with a browser o
 | **Setup** | Set the home network to *Private* in Windows, and allow Mimic through the firewall once | [Tailscale](https://tailscale.com/download) on both devices, same account. The first time, turn on HTTPS for your tailnet (Mimic shows the link). On Linux, run `sudo tailscale set --operator=$USER` once |
 
 - **The link is the key.** It carries a secret that the browser keeps as a cookie, and anyone with it can use Mimic on this PC, so send it only to your own devices. **New link** signs out every device that used the old one.
+- **This network isn't encrypted.** Its link is plain HTTP, so others on the same Wi-Fi could see what you type and hear, or copy the session and sign in as you. Use it only on a Wi-Fi you trust. Anywhere (Tailscale) is encrypted end to end.
 - **Closed to the internet.** On this network, Mimic listens only on the home-network adapter, never on a connection plugged straight into the internet, and with no home network it suggests Tailscale instead.
 - **In the browser,** Save downloads takes to that device and imports upload clips from it. Folders, the engines folder, the Hugging Face token and updates stay on this PC.
 
