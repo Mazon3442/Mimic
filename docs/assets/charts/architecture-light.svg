@@ -21,8 +21,8 @@
 <text x="48" y="356" font-size="13" fill="#4F5154">KittenTTS 2 · Breeze TTS 2 · Qwen3-TTS · NeuTTS Air</text>
 <text x="48" y="376" font-size="13" fill="#4F5154">Speech-to-text (faster-whisper, CPU)</text>
 <rect x="534" y="304" width="314" height="104" rx="10" fill="#FFFFFF" stroke="#D4D4CE" stroke-width="1"/>
-<text x="550" y="332" font-size="15" font-weight="600" fill="#141516">Fish S2 Pro</text>
-<text x="550" y="356" font-size="13" fill="#4F5154">vLLM-Omni server in WSL</text>
-<text x="550" y="376" font-size="13" fill="#4F5154">(Windows + NVIDIA)</text>
+<text x="550" y="332" font-size="15" font-weight="600" fill="#141516">Engine servers (Windows + NVIDIA)</text>
+<text x="550" y="356" font-size="13" fill="#4F5154">Fish S2 Pro: vLLM-Omni in WSL</text>
+<text x="550" y="376" font-size="13" fill="#4F5154">Fish Audio Drama 3: native audio.cpp</text>
 <text x="440" y="446" font-size="13" fill="#75777A" text-anchor="middle">Models run on an NVIDIA GPU (CUDA), an Intel Arc GPU (XPU) or the CPU. Nothing leaves the computer.</text>
 </svg>

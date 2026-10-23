@@ -29,7 +29,7 @@
 | --- | --- |
 | **Voice profiles** | Record a voice by reading a short passage, import a clip, or drop audio files onto the window. Each profile keeps its clip, transcript and favorite settings. |
 | **Automatic transcripts** | Clips are transcribed on your machine with faster-whisper, so engines that need the exact words get them without typing. |
-| **Nine engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Qwen3-TTS 0.6B and 1.7B, Chatterbox Turbo, VoxCPM2, Audio8 TTS Preview, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
+| **Ten engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Fish Audio Drama 3, Qwen3-TTS 0.6B and 1.7B, Chatterbox Turbo, VoxCPM2, Audio8 TTS Preview, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
 | **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an AMD Radeon GPU on Linux (ROCm, experimental), an Intel Arc GPU (experimental) or the CPU. If a driver or runtime is missing, it says which package to install for your distro. The bar at the top shows real VRAM or RAM use. |
 | **One engine in memory** | Switching engines unloads the old one first, and idle engines unload after a set time, so the GPU is free for everything else. |
 | **Nothing saved behind your back** | Takes stay in a temporary cache until you press Save (Ctrl+S) or Save as (Ctrl+Shift+S). WAV, FLAC or MP3. |
@@ -87,9 +87,10 @@ Only clone voices you have permission to use. Mimic asks you to confirm this onc
 | **KittenTTS 2** | GPU (CPU possible) | 8.8 GB VRAM · 14.5 GB RAM | clip only | Download in Mimic | Stellon Labs Community² |
 | **NeuTTS Air** | CPU (Linux) | about 1 GB RAM¹ | clip (3–15 s) + transcript | Download in Mimic, needs a free Hugging Face account | Apache 2.0 |
 | **Breeze TTS 2** | NVIDIA GPU | about 8 GB VRAM¹ | clip + transcript | Set up by hand | Non-commercial |
+| **Fish Audio Drama 3** (Q4) | NVIDIA GPU, Windows | 12.9 GB VRAM + 11 GB RAM | clip + transcript, up to 16 voices per scene | Download in Mimic | Fish Audio Community³ |
 | **Fish S2 Pro** | NVIDIA GPU, Windows (WSL) | about 15 GB VRAM¹ | clip + transcript | Set up by hand | See model card |
 
-<sub>Qwen, Kitten, Chatterbox, VoxCPM2 and Audio8 figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic. ² KittenTTS is powered by Stellon Labs: free for personal use, research and small businesses (under US$1M revenue and funding, and commercial users must register with Stellon Labs); its outputs may not be used to train other models. Each engine's license applies to what you make with it; Breeze and Fish are non-commercial.</sub>
+<sub>Qwen, Kitten, Chatterbox, VoxCPM2, Audio8 and Drama 3 figures were measured with Mimic (peak while cloning, RTX 5070 Ti / 16-thread CPU). ¹ Published or setup-note figures, not yet measured with Mimic. ² KittenTTS is powered by Stellon Labs: free for personal use, research and small businesses (under US$1M revenue and funding, and commercial users must register with Stellon Labs); its outputs may not be used to train other models. ³ Drama 3 is free for research and non-commercial use; commercial use only under US$500k annual revenue, and hosted voice services need a separate license from Fish Audio. Each engine's license applies to what you make with it; Breeze and Fish S2 Pro are non-commercial.</sub>
 
 <div align="center">
 <picture>
@@ -108,11 +109,11 @@ Only clone voices you have permission to use. Mimic asks you to confirm this onc
 <div align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/charts/architecture-dark.svg">
-  <img alt="Diagram: the interface talks to a Rust core through Tauri commands; the core runs one Python worker per engine over JSON lines, and the Fish server over HTTP; models run on an NVIDIA GPU, an AMD GPU (Linux), an Intel Arc GPU or the CPU." src="docs/assets/charts/architecture-light.svg" width="760">
+  <img alt="Diagram: the interface talks to a Rust core through Tauri commands; the core runs one Python worker per engine over JSON lines, and the Fish S2 Pro and Drama 3 servers over HTTP; models run on an NVIDIA GPU, an AMD GPU (Linux), an Intel Arc GPU or the CPU." src="docs/assets/charts/architecture-light.svg" width="760">
 </picture>
 </div>
 
-Each engine lives in its own Python environment, so their dependencies never collide. The Rust core keeps one engine in memory at a time, and puts every engine process in a job (Windows) or process group (Linux) that ends with Mimic. Even a crash can't leave a model holding your VRAM.
+Each engine lives in its own Python environment, or for Drama 3 its own native audio.cpp build, so their dependencies never collide. The Rust core keeps one engine in memory at a time, and puts every engine process in a job (Windows) or process group (Linux) that ends with Mimic. Even a crash can't leave a model holding your VRAM.
 
 <details>
 <summary><b>Linux, Caelestia and Hyprland</b></summary>
@@ -143,6 +144,18 @@ NeuTTS Air is the engine for older laptops: it runs on the CPU in about 1 GB of 
 </details>
 
 <details>
+<summary><b>Fish Audio Drama 3: directions and scenes</b></summary>
+
+Drama 3 is a 35B mixture-of-experts acting model. Mimic downloads the Q4 GGUF from [Jmica/Drama-3-GGUF](https://huggingface.co/Jmica/Drama-3-GGUF) and runs it on [audio.cpp](https://github.com/0xShug0/audio.cpp)'s CUDA build. 24 of its 40 expert layers stay in system RAM, so it fits a 16 GB card.
+
+- **Tone and sounds:** *Add sound* inserts directions such as whisper, shout, angry, sad, excited, laugh, sigh or pause. Drama 3 reads any direction in brackets, so you can also type your own, like `[nervous laugh]` or `[slowly, almost asleep]`. Directions mid-sentence work more reliably than at the very start.
+- **Scenes:** *Add sound › Switch speaker* drops a speaker chip into the script. The selected profile opens the scene, and every other profile you add speaks the words after its chip. Up to 16 voices, each needing its clip and transcript.
+- **Controls:** Temperature (1.0), Top P (0.9) and Top K (no limit by default; Fish found a cap of 30 can leave takes stuck in silence). Every control shows the engine's recommended value. For scenes, keep Temperature at 1.0: lower values more often leave silence where a new speaker starts, and Mimic warns when a setting is in a range like that.
+- Emotion and sound directions sometimes run long or drop a line. Press Again for another take.
+
+</details>
+
+<details>
 <summary><b>Engines folder and command-line downloads</b></summary>
 
 Engines, their Python environments and model files live in one folder (Settings › Engines folder):
@@ -159,13 +172,14 @@ chatterbox-env/ models/chatterbox-turbo/
 voxcpm-env/ models/VoxCPM2/
 audio8-env/ models/Audio8-TTS-Preview-0.6b/
 neutts-env/
+drama3-env/ models/Drama-3/   (audio.cpp runtime + GGUF)
 stt-env/
 ```
 
 Engines can be downloaded without opening the window:
 
 ```bash
-mimic --install qwen06      # also: qwen17, kitten, chatterbox, voxcpm, audio8, neutts, stt
+mimic --install qwen06      # also: qwen17, kitten, chatterbox, voxcpm, audio8, neutts, drama3, stt
 ```
 
 Breeze TTS 2 and Fish S2 Pro are set up by hand: `breeze-env/`, `models/breeze-tts-2/` and the `breeze-tts/` repo for Breeze, and `scripts/setup-vllm-wsl.sh` in WSL Ubuntu 24.04 for Fish (set `FISH_WEIGHTS` to the folder holding the weights).

@@ -2,6 +2,7 @@
 //! because the big engines don't fit in 16 GB together.
 
 use crate::audio;
+use crate::drama3;
 use crate::fish;
 use crate::store::Profile;
 use crate::worker::Worker;
@@ -61,6 +62,7 @@ pub fn installed(home: &Path) -> Value {
 enum Resident {
     Py(Worker),
     Fish(fish::Server),
+    Drama3(drama3::Server),
 }
 
 #[derive(Deserialize)]
@@ -77,6 +79,9 @@ pub struct GenRequest {
     pub instruction: String,
     #[serde(default)]
     pub seed: i64,
+    /// Drama 3 scenes: the profiles that speak at `<|speaker:1|>`, `<|speaker:2|>`, ... (speaker 0 is the main profile).
+    #[serde(default)]
+    pub cast: Vec<String>,
     /// Controls panel values the user changed. "speed" is applied here; the rest go to the engine.
     #[serde(default)]
     pub controls: BTreeMap<String, f64>,
@@ -141,6 +146,10 @@ impl Manager {
             }
             "neutts" => Ok(Resident::Py(start_py("neutts-env", "neutts_worker.py", &[])?)),
             "fish" if cfg!(windows) => Ok(Resident::Fish(fish::Server::start(&paths.scripts, &paths.logs.join("fish.log"))?)),
+            "drama3" => {
+                let dir = crate::install::model_dir(&paths.home, engine).ok_or("Drama 3 runs only on Windows for now")?;
+                Ok(Resident::Drama3(drama3::Server::start(&dir, &paths.logs.join("drama3.log"))?))
+            }
             other => Err(format!("{other} isn't available in this version of Mimic yet")),
         }
     }
@@ -163,6 +172,7 @@ impl Manager {
                 *self.killer.lock().unwrap() = Some(match &r {
                     Resident::Py(w) => w.killer(),
                     Resident::Fish(s) => s.killer(),
+                    Resident::Drama3(s) => s.killer(),
                 });
                 // A worker that was asked for a GPU but couldn't use it says so; the UI explains the fix.
                 if let Resident::Py(w) = &r {
@@ -187,7 +197,7 @@ impl Manager {
         self.ensure(app, paths, &mut slot, engine)
     }
 
-    pub fn generate(&self, app: &AppHandle, paths: &Paths, profile: &Profile, req: &GenRequest) -> Result<Take, String> {
+    pub fn generate(&self, app: &AppHandle, paths: &Paths, profile: &Profile, cast: &[Profile], req: &GenRequest) -> Result<Take, String> {
         let needs_ref = !(req.engine == "breeze" && req.breeze_mode == "Design");
         if needs_ref && profile.builtin.is_empty() && profile.duration < 3.0 {
             return Err(format!("{}'s clip is under 3 seconds", profile.name));
@@ -204,6 +214,14 @@ impl Manager {
         if !profile.builtin.is_empty() && req.engine != "kitten" {
             return Err(format!("{} is a built-in Kitten voice", profile.name));
         }
+        if cast.len() > 15 {
+            return Err("a scene can have up to 16 speakers".into());
+        }
+        for p in cast {
+            if !p.builtin.is_empty() || p.duration < 3.0 || !Path::new(&p.clip).is_file() || p.transcript.trim().is_empty() {
+                return Err(format!("{} can't speak in the scene: it needs a clip of 3 s or more and its transcript", p.name));
+            }
+        }
 
         self.cancelled.store(false, Ordering::SeqCst);
         self.busy.store(true, Ordering::SeqCst);
@@ -214,6 +232,7 @@ impl Manager {
             emit(app, &req.engine, "generating");
             let out = paths.takes.join(format!("take-{}.wav", now_ms()));
             let out_s = out.to_string_lossy().to_string();
+            let sampling: BTreeMap<_, _> = req.controls.iter().filter(|(k, _)| k.as_str() != "speed").collect();
             let res = match &mut slot.as_mut().unwrap().1 {
                 Resident::Py(w) => {
                     let mut request = match req.engine.as_str() {
@@ -235,11 +254,15 @@ impl Manager {
                         _ => json!({ "text": req.text, "output": out_s, "seed": req.seed, "language": "English",
                                      "ref_audio": profile.clip, "ref_text": profile.transcript }),
                     };
-                    let sampling: BTreeMap<_, _> = req.controls.iter().filter(|(k, _)| k.as_str() != "speed").collect();
                     request["controls"] = json!(sampling);
                     w.request(&request, GEN_TIMEOUT).map(|_| ())
                 }
                 Resident::Fish(s) => s.generate(&req.text, Some((clip, profile.transcript.as_str())), &out),
+                Resident::Drama3(s) => {
+                    let speakers: Vec<(&Path, &str)> = std::iter::once(profile).chain(cast)
+                        .map(|p| (Path::new(&p.clip), p.transcript.as_str())).collect();
+                    s.generate(&req.text, &speakers, &sampling, req.seed, &out)
+                }
             };
             let res = res.and_then(|()| audio::set_speed(&out, req.controls.get("speed").copied().unwrap_or(1.0)));
             match res {

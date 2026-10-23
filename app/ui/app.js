@@ -54,7 +54,14 @@ const ENGINES = {
                 real: "a few seconds", available: true, download: "about 1.5 GB (PyTorch for CPU + model)",
                 linuxOnly: true, needsAccount: true,
                 note: "Made for laptops: always runs on the CPU in about 1 GB. Clips of 3 to 15 s. Needs a free Hugging Face account.", tag: () => "", has: [] },
+  // A 35B mixture-of-experts on audio.cpp: 24 of its 40 expert layers stay in system RAM so it fits a 16 GB card.
+  drama3:     { name: "Drama 3", full: "Fish Audio Drama 3, 35B MoE (Q4)", gb: 12.9, cpuGb: null, transcript: true, license: "Fish Audio Community", real: "about a minute", available: true,
+                windowsOnly: true, download: "about 24 GB (audio.cpp + model)",
+                note: "Acts: tone and sound directions, and scenes with up to 16 voices. Also uses about 11 GB of RAM.",
+                tag: t => `[${DRAMA3_TAGS[t] || t}]`, has: ["laugh", "sigh", "pause", "breath", "excited", "chuckle", "cough", "gasp", "whisper", "shout", "angry", "sad"] },
 };
+// Drama 3 reads free-form directions in brackets ([sighs], [laughs], [whisper] in Fish's examples), so any wording works.
+const DRAMA3_TAGS = { laugh: "laughs", sigh: "sighs", breath: "inhales", chuckle: "chuckles", cough: "coughs", gasp: "gasps", shout: "shouting" };
 // ---------- controls panel ----------
 // What each slider means. Values the user changes are kept per engine in prefs.controls and sent with every take.
 const ICONS16 = {
@@ -91,7 +98,21 @@ const ENGINE_CONTROLS = {
   voxcpm: { cfg: 2, steps: 10 },
   audio8: { temperature: 0.7, top_p: 0.9, top_k: 50 },
   neutts: { gap: 0.18 },
+  drama3: { temperature: 1, top_p: 0.9, top_k: 0 },
 };
+// Settings an engine is known to break at: the card warns while the value is in range, and so does the composer.
+const CONTROL_RISKS = {
+  drama3: {
+    // Two-voice scenes in testing: 16 of 16 fine at 1.0, 3 of 10 stalled or dropped a line between 0.65 and 0.9.
+    temperature: { below: 1, why: "Below 1.0, Drama 3 more often stalls in silence where a new speaker starts. 1.0 is the tested setting." },
+    top_k: { from: 1, to: 30, why: "A limit of 30 or less can leave Drama 3 stuck in silence. No limit (0) is safest." },
+  },
+};
+const controlRisk = (engine, key, v) => {
+  const r = CONTROL_RISKS[engine]?.[key];
+  return r && ((r.below != null && v < r.below - 1e-9) || (r.from != null && v >= r.from && v <= r.to)) ? r.why : null;
+};
+const riskyControls = engine => ownControls(engine).filter(k => controlRisk(engine, k, controlValue(engine, k)));
 const PIN_ICON =`<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M6 2h4l-.6 4 2.6 2.4V10H4V8.4L6.6 6z"/><path d="M8 10v4" stroke-linecap="round"/></svg>`;
 const installing = {}; // id -> progress label while a download runs
 const ALL = Object.keys(ENGINES);
@@ -99,6 +120,8 @@ const SOUNDS = [
   ["laugh", "A short laugh."], ["sigh", "An audible sigh."], ["pause", "A beat of silence."],
   ["breath", "A breath in before the next words."], ["excited", "Reads the next words with energy."],
   ["chuckle", "A quiet chuckle."], ["cough", "A short cough."], ["gasp", "A sharp breath in."],
+  ["whisper", "Whispers the next words."], ["shout", "Shouts the next words."],
+  ["angry", "Reads the next words angrily."], ["sad", "Reads the next words sadly."],
 ];
 const MODES = {
   breeze: { key: "breezeMode", word: "mode", options: [
@@ -146,7 +169,7 @@ const memFor = id => (device === "cpu" || ENGINES[id].cpuOnly ? ENGINES[id].cpuG
 const onVram = () => (device === "cuda" || device === "rocm") && hw.vramTotal > 0;
 function fit(id) {
   const e = ENGINES[id], need = memFor(id);
-  if (e.windowsOnly && platform !== "windows") return { ok: false, why: "runs only on Windows for now (it needs WSL)" };
+  if (e.windowsOnly && platform !== "windows") return { ok: false, why: "runs only on Windows for now" };
   if (e.linuxOnly && platform !== "linux") return { ok: false, why: "runs only on Linux for now" };
   if (need == null) return { ok: false, why: device === "cpu" ? "is too heavy to run on a CPU" : "doesn't run on this GPU" };
   if (onVram() && !e.cpuOnly) return hw.vramTotal >= need + 1 ? { ok: true } : { ok: false, why: `needs about ${need.toFixed(1)} GB of VRAM; this GPU has ${hw.vramTotal.toFixed(0)} GB` };
@@ -208,7 +231,7 @@ function drawWave(canvas, peaks, played = 0) {
 async function paint(canvas, path, played = 0) { drawWave(canvas, await peaksFor(path), played); }
 
 // ---------- top bar: the memory bar is the engine picker ----------
-// Engines that exist on this OS (Fish needs WSL, so it's Windows-only).
+// Engines that exist on this OS (Fish needs WSL and Drama 3 a Windows build, so they're Windows-only).
 const listed = id => !(ENGINES[id].windowsOnly && platform !== "windows") && !(ENGINES[id].linuxOnly && platform !== "linux");
 function engineLabel(id) {
   if (!ENGINES[id].available || !installed[id]) return [ENGINES[id].download ? "not downloaded" : "not set up", "nofit"];
@@ -437,24 +460,44 @@ function openNewVoice() { $("#newVoiceDlg").classList.add("open"); $("#nvRecord"
 function closeNewVoice() { $("#newVoiceDlg").classList.remove("open"); }
 
 // ---------- script ----------
+// Drama 3 scenes: speaker chips in the script switch voices. The selected profile is speaker 0 and opens the scene;
+// the other profiles become speakers 1, 2, ... in the order they first appear.
+const SCENE_ENGINES = ["drama3"];
+const sceneCast = () => [...new Set($$("#script [data-voice]").map(n => n.dataset.voice))].filter(id => id !== currentVoice()?.id);
+const speakerIndex = id => (id === currentVoice()?.id ? 0 : 1 + sceneCast().indexOf(id));
+// Walks the whole script, chips included. Pressing Enter wraps lines in their own elements, so chips can sit
+// at any depth; line breaks become spaces.
+function scriptParts(chip) {
+  let out = "";
+  const walk = node => node.childNodes.forEach(n => {
+    if (n.dataset?.voice || n.dataset?.tag) out += chip(n);
+    else if (n.nodeType === Node.TEXT_NODE) out += n.textContent;
+    else { if (/^(BR|DIV|P)$/.test(n.nodeName)) out += " "; walk(n); }
+  });
+  walk($("#script"));
+  return out;
+}
 function scriptText(engine) {
   const has = tagsFor(engine);
-  let out = "";
-  $("#script").childNodes.forEach(n => {
-    if (n.dataset && n.dataset.tag) out += has.includes(n.dataset.tag) ? ENGINES[engine].tag(n.dataset.tag) : " ";
-    else out += n.textContent;
-  });
-  return out.replace(/\s+/g, " ").trim();
+  const out = scriptParts(n => n.dataset.voice
+    ? (SCENE_ENGINES.includes(engine) ? ` <|speaker:${speakerIndex(n.dataset.voice)}|> ` : " ")
+    : (has.includes(n.dataset.tag) ? ` ${ENGINES[engine].tag(n.dataset.tag)} ` : " "));
+  // Each speaker's turn starts on its own line: on one line, Drama 3 keeps the first voice for the whole scene.
+  return out.replace(/\s+/g, " ").replace(/ ?<\|speaker:/g, "\n<|speaker:").trim();
 }
 function neutralText() {
-  let out = "";
-  $("#script").childNodes.forEach(n => (out += n.dataset && n.dataset.tag ? `[${n.dataset.tag}]` : n.textContent));
-  return out.replace(/\s+/g, " ").trim();
+  return scriptParts(n => (n.dataset.voice ? ` ${n.textContent}: ` : ` [${n.dataset.tag}] `)).replace(/\s+/g, " ").trim();
 }
 // A sound the current engine can't make is struck through, right where it sits in the script.
 function renderDialect() {
   const e = ENGINES[state.engine], has = tagsFor(state.engine);
   $$("#script .tag").forEach(t => {
+    if (t.dataset.voice) {
+      const ok = SCENE_ENGINES.includes(state.engine);
+      t.classList.toggle("skip", !ok);
+      t.title = ok ? `${voiceById(t.dataset.voice)?.name || "A deleted profile"} speaks from here` : `${e.name} reads with one voice, so speaker changes are skipped.`;
+      return;
+    }
     const ok = has.includes(t.dataset.tag);
     t.classList.toggle("skip", !ok);
     t.title = ok ? `${e.name} reads this as ${e.tag(t.dataset.tag)}`
@@ -469,7 +512,16 @@ document.addEventListener("selectionchange", () => {
 });
 function insertTag(tag) {
   const span = document.createElement("span");
-  span.className = "tag"; span.contentEditable = "false"; span.dataset.tag = tag; span.textContent = tag;
+  span.dataset.tag = tag; span.textContent = tag;
+  insertChip(span);
+}
+function insertSpeaker(id) {
+  const span = document.createElement("span");
+  span.classList.add("speaker"); span.dataset.voice = id; span.textContent = voiceById(id).name;
+  insertChip(span);
+}
+function insertChip(span) {
+  span.classList.add("tag"); span.contentEditable = "false";
   const sel = getSelection(), el = $("#script"), r = lastCaret;
   if (r && el.contains(r.startContainer)) {
     r.deleteContents(); r.insertNode(document.createTextNode(" ")); r.insertNode(span);
@@ -502,7 +554,17 @@ function blocker(engine) {
   if (engine === "breeze" && state.breezeMode !== "Clone" && !$("#instr").value.trim()) return { why: "Describe the voice first." };
   if (design) return null;
   const r = readiness(v, engine);
-  return r.ok ? null : { why: r.wait ? `Waiting for ${v.name}'s transcript. It takes a few seconds.` : `Can't use ${v?.name || "this voice"} with ${e.name}: ${r.why}.`, fix: r.fix, wait: r.wait };
+  if (!r.ok) return { why: r.wait ? `Waiting for ${v.name}'s transcript. It takes a few seconds.` : `Can't use ${v?.name || "this voice"} with ${e.name}: ${r.why}.`, fix: r.fix, wait: r.wait };
+  if (!SCENE_ENGINES.includes(engine)) return null;
+  const cast = sceneCast();
+  if (cast.length > 15) return { why: "A scene can have up to 16 voices." };
+  for (const id of cast) {
+    const p = voiceById(id);
+    if (!p) return { why: "A speaker in the script was deleted. Remove its chip." };
+    const pr = readiness(p, engine);
+    if (!pr.ok) return { why: `${p.name} can't speak in the scene: ${pr.why}.`, wait: pr.wait };
+  }
+  return null;
 }
 const compareSet = () => ALL.filter(id => !blocker(id));
 function renderPreflight() {
@@ -521,7 +583,16 @@ function renderPreflight() {
   const how = state.engine === "breeze" && state.breezeMode === "Design" ? "New voice from your description"
     : v.builtin ? "Built-in voice" : `${v.duration.toFixed(1)} s clip${e.transcript ? " + transcript" : ""}`;
   const load = state.resident === state.engine ? "loaded, starts now" : `loads first (${e.real})`;
-  p.textContent = `${how} · ${load}`;
+  const risky = riskyControls(state.engine);
+  if (!risky.length) { p.textContent = `${how} · ${load}`; return; }
+  // Settings known to break this engine don't block a take, but the fix is one click away.
+  p.className = "preflight risk";
+  p.innerHTML = escapeHtml(`${risky.map(k => `${CONTROL[k].label} ${fmtControl(k, controlValue(state.engine, k))}`).join(" and ")} can leave silent gaps with ${e.name}.`)
+    + ` <button id="pfFix">Use recommended</button>`;
+  $("#pfFix").onclick = () => {
+    risky.forEach(k => setControl(state.engine, k, null)); persistPrefs(); renderControls(); renderPreflight();
+    log(`${risky.map(k => CONTROL[k].label).join(" and ")} back to ${e.name}'s recommended settings.`);
+  };
 }
 
 // ---------- menus (open from their trigger) ----------
@@ -537,10 +608,19 @@ function menuHtml(kind) {
   }).join("") + `<div class="menu-sep"></div><button class="mi" data-engines><b>More engines…</b><span>Smaller engines for other PCs</span></button>`;
   if (kind === "mode") { const m = MODES[state.engine]; return `<p class="menu-title">${e.name} ${m.word}</p>` + m.options.map(([o, d]) =>
     `<button class="mi" data-mode="${o}" aria-checked="${state[m.key] === o}"><b>${o}</b><span>${d}</span></button>`).join(""); }
-  if (kind === "sound") return `<p class="menu-title">Add at the cursor</p>` + SOUNDS.map(([s, d]) => {
-    const ok = tagsFor(state.engine).includes(s);
-    return `<button class="mi" data-sound="${s}"><b>${s[0].toUpperCase() + s.slice(1)}<em>${ok ? escapeHtml(e.tag(s)) : `${e.name} skips it`}</em></b><span>${d}</span></button>`;
-  }).join("");
+  if (kind === "sound") {
+    // Scene engines list speakers first: switching voices is the reason to open this menu with them.
+    const scene = SCENE_ENGINES.includes(state.engine);
+    const speakers = scene
+      ? `<p class="menu-title">Switch speaker</p>` + profiles.filter(p => !p.builtin).map(p =>
+          `<button class="mi" data-speaker="${p.id}"><b>${escapeHtml(p.name)}<em>${p.id === state.voice ? "speaker 0" : "joins the scene"}</em></b><span>Speaks the words after this point</span></button>`).join("")
+        + `<div class="menu-sep"></div>`
+      : SCENE_ENGINES.some(usable) ? `<p class="menu-title">Several voices in one take? Switch the engine to ${SCENE_ENGINES.filter(usable).map(id => ENGINES[id].name).join(" or ")}.</p>` : "";
+    return speakers + `<p class="menu-title">Add at the cursor${scene ? ", or type any direction in brackets, like [nervous laugh]" : ""}</p>` + SOUNDS.map(([s, d]) => {
+      const ok = tagsFor(state.engine).includes(s);
+      return `<button class="mi" data-sound="${s}"><b>${s[0].toUpperCase() + s.slice(1)}<em>${ok ? escapeHtml(e.tag(s)) : `${e.name} skips it`}</em></b><span>${d}</span></button>`;
+    }).join("");
+  }
   return "";
 }
 function openMenu(kind, trigger) {
@@ -548,12 +628,17 @@ function openMenu(kind, trigger) {
   closeMenu();
   const m = $("#menu");
   m.innerHTML = menuHtml(kind);
+  m.style.maxHeight = "";
   m.classList.add("open");
   menuFor = trigger; trigger.setAttribute("aria-expanded", "true");
-  const r = trigger.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+  const r = trigger.getBoundingClientRect(), mw = m.offsetWidth;
   const want = kind === "sound" ? r.right - mw : r.left;
   const left = Math.max(12, Math.min(want, innerWidth - mw - 12));
-  const above = r.top - mh - 8 > 8;
+  // A menu taller than the room on either side opens on the roomier side and scrolls.
+  const roomAbove = r.top - 20, roomBelow = innerHeight - r.bottom - 20;
+  const above = m.offsetHeight <= roomAbove || (m.offsetHeight > roomBelow && roomAbove > roomBelow);
+  m.style.maxHeight = `${above ? roomAbove : roomBelow}px`;
+  const mh = m.offsetHeight;
   m.style.left = `${left}px`;
   m.style.top = `${above ? r.top - mh - 8 : r.bottom + 8}px`;
   m.style.setProperty("--origin", `${r.left - left + r.width / 2}px ${above ? "100%" : "0"}`);
@@ -571,6 +656,7 @@ $("#menu").onclick = ev => {
   else if ("engines" in b.dataset) { closeMenu(); openEngines(); }
   else if ("newvoice" in b.dataset) { closeMenu(); openNewVoice(); }
   else if (b.dataset.sound) { closeMenu(); insertTag(b.dataset.sound); }
+  else if (b.dataset.speaker) { closeMenu(); insertSpeaker(b.dataset.speaker); }
 };
 document.addEventListener("click", ev => {
   const t = ev.target.closest("[data-menu]");
@@ -589,7 +675,7 @@ function controlDefault(engine, key) {
 const changedControls = engine => prefs.controls?.[engine] || {};
 const sentControls = engine => Object.fromEntries(Object.entries(changedControls(engine)).filter(([k]) => k === "speed" || ownControls(engine).includes(k)));
 const controlValue = (engine, key) => changedControls(engine)[key] ?? controlDefault(engine, key);
-const fmtControl = (key, v) => `${v.toFixed(CONTROL[key].digits ?? 2)}${CONTROL[key].unit || ""}`;
+const fmtControl = (key, v) => (key === "top_k" && v === 0 ? "no limit" : `${v.toFixed(CONTROL[key].digits ?? 2)}${CONTROL[key].unit || ""}`);
 function setControl(engine, key, value) {
   prefs.controls ||= {};
   const mine = { ...changedControls(engine) };
@@ -604,7 +690,8 @@ function controlCard(key) {
       ${changed ? `<button class="ctl-reset" data-reset="${key}" title="Back to ${fmtControl(key, controlDefault(e, key))}">Reset</button>` : ""}
       <span class="ctl-val ${changed ? "" : "def"}">${fmtControl(key, v)}</span></div>
     <input class="slider" type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${v}" aria-labelledby="ctl-${key}" style="--pct:${sliderPct(key, v)}">
-    <p>${c.hint}</p></div>`;
+    <p class="ctl-warn" ${controlRisk(e, key, v) ? "" : "hidden"}>${controlRisk(e, key, v) || ""}</p>
+    <p>${c.hint} <span class="ctl-rec">Recommended for ${ENGINES[e].name}: ${fmtControl(key, controlDefault(e, key))}.</span></p></div>`;
 }
 function renderControls() {
   const e = ENGINES[state.engine], changed = Object.keys(changedControls(state.engine)).length;
@@ -628,19 +715,21 @@ $("#controlsBody").addEventListener("input", e => {
   e.target.style.setProperty("--pct", sliderPct(key, v));
   const val = card.querySelector(".ctl-val");
   val.textContent = fmtControl(key, v); val.classList.toggle("def", !(key in changedControls(state.engine)));
+  const warn = card.querySelector(".ctl-warn"), why = controlRisk(state.engine, key, v);
+  warn.hidden = !why; warn.textContent = why || "";
 });
 // Saving and the Reset links wait until the slider is let go, so dragging doesn't rebuild the card under the pointer.
 $("#controlsBody").addEventListener("change", e => {
   if (!e.target.matches(".slider")) return;
   const key = e.target.closest("[data-ctl]").dataset.ctl;
-  persistPrefs(); renderControls();
+  persistPrefs(); renderControls(); renderPreflight();
   $(`[data-ctl="${key}"] .slider`)?.focus({ preventScroll: true }); // arrow keys keep working after the rebuild
 });
 $("#controlsBody").addEventListener("click", e => {
   const r = e.target.closest("[data-reset]"); if (!r) return;
-  setControl(state.engine, r.dataset.reset, null); persistPrefs(); renderControls();
+  setControl(state.engine, r.dataset.reset, null); persistPrefs(); renderControls(); renderPreflight();
 });
-$("#controlsReset").onclick = () => { delete prefs.controls?.[state.engine]; persistPrefs(); renderControls(); log(`${ENGINES[state.engine].name} is back to its default controls.`); };
+$("#controlsReset").onclick = () => { delete prefs.controls?.[state.engine]; persistPrefs(); renderControls(); renderPreflight(); log(`${ENGINES[state.engine].name} is back to its default controls.`); };
 function openControls() {
   closeMenu();
   const d = $("#controls"); d.classList.add("open"); d.inert = false;
@@ -741,7 +830,7 @@ async function takeAction(t, act) {
   if (act === "play") return togglePlay(t);
   if (act === "save") return saveTake(t, false);
   if (act === "saveas") return saveTake(t, true);
-  if (act === "again") { state.seed = Math.floor(Math.random() * 99999); return generate(t.engine, { text: t.text, shown: t.shown, voice: t.voice }); }
+  if (act === "again") { state.seed = Math.floor(Math.random() * 99999); return generate(t.engine, { text: t.text, shown: t.shown, voice: t.voice, cast: t.cast }); }
   if (act === "delete") {
     if (player.key === t.id) stopAudio();
     takes = takes.filter(x => x !== t);
@@ -786,13 +875,14 @@ async function generate(engine, opts = {}) {
   const design = engine === "breeze" && state.breezeMode === "Design";
   state.busy = true; state.cancelling = false; renderPreflight(); logoBusy(true);
   const t = { id: `t${Date.now()}${Math.random()}`, n: state.nextN++, engine, voice: v.id, pending: true, design, saved: null,
-              text: opts.text || scriptText(engine), shown: opts.shown || neutralText(), group: opts.group, groupIndex: opts.groupIndex };
+              text: opts.text || scriptText(engine), shown: opts.shown || neutralText(), group: opts.group, groupIndex: opts.groupIndex,
+              cast: opts.cast || (SCENE_ENGINES.includes(engine) ? sceneCast() : []) };
   takes.push(t); state.take = t.id; renderTakes();
   trace(`generate take ${t.n} with ${engine}${opts.group ? ` (comparison ${opts.group})` : ""}`);
   const t0 = performance.now();
   const timer = setInterval(() => { const el = document.querySelector(`.take[data-id="${t.id}"] [data-elapsed]`); if (el) el.textContent = `${((performance.now() - t0) / 1000).toFixed(0)} s`; }, 250);
   try {
-    const r = await invoke("generate", { req: { engine, profileId: v.id, text: t.text, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, instruction: $("#instr").value.trim(), seed: state.seed, controls: sentControls(engine) } });
+    const r = await invoke("generate", { req: { engine, profileId: v.id, text: t.text, kittenStyle: state.kittenStyle, breezeMode: state.breezeMode, instruction: $("#instr").value.trim(), seed: state.seed, controls: sentControls(engine), cast: t.cast } });
     Object.assign(t, { pending: false, path: r.path, seconds: r.seconds, elapsed: r.elapsed });
     log(`${takeLabel(t)} is ready (${r.seconds.toFixed(1)} s of audio in ${r.elapsed.toFixed(1)} s).${matchMedia("(pointer: coarse)").matches ? "" : " Ctrl S saves it."}`);
     renderTakes(t.id);
@@ -1419,6 +1509,9 @@ async function selfTest(script) {
     else if (cmd === "engine") selectEngine(arg);
     else if (cmd === "voice") { const v = profiles.find(p => p.name.toLowerCase().includes(arg.toLowerCase())); if (v) selectProfile(v.id); }
     else if (cmd === "text") { $("#script").textContent = arg; renderCount(); renderPreflight(); }
+    else if (cmd === "add") $("#script").append(` ${arg}`);
+    else if (cmd === "sound") insertTag(arg);
+    else if (cmd === "speaker") { const v = profiles.find(p => p.name.toLowerCase().includes(arg.toLowerCase())); if (v) insertSpeaker(v.id); }
     else if (cmd === "type") { // types like a person, for demo recordings
       $("#script").textContent = "";
       for (const ch of arg) { $("#script").textContent += ch; renderCount(); await new Promise(r => setTimeout(r, 38)); }

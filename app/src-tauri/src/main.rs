@@ -4,6 +4,7 @@
 mod audio;
 mod caelestia;
 mod engines;
+mod drama3;
 mod fish;
 mod hw;
 mod install;
@@ -274,8 +275,9 @@ async fn generate(handle: AppHandle, app: State<'_, Shared>, req: GenRequest) ->
     let app = app.inner().clone();
     blocking(move || {
         let profile = app.profile(&req.profile_id)?;
+        let cast = req.cast.iter().map(|id| app.profile(id)).collect::<Result<Vec<_>, _>>()?;
         let paths = app.paths();
-        app.engines.generate(&handle, &paths, &profile, &req)
+        app.engines.generate(&handle, &paths, &profile, &cast, &req)
     })
     .await
 }
@@ -540,8 +542,9 @@ fn managed(home: &Path) -> Value {
     install::downloadable()
         .iter()
         .map(|id| {
-            // Engines without PyTorch (speech-to-text) count as CPU builds.
-            let v = if install::is_installed(home, id) { Value::from(install::torch_build(home, id).unwrap_or_else(|| "cpu".into())) } else { Value::from(false) };
+            // Engines without PyTorch: speech-to-text counts as a CPU build, Drama 3's audio.cpp is the CUDA build.
+            let native = if *id == "drama3" { "cuda" } else { "cpu" };
+            let v = if install::is_installed(home, id) { Value::from(install::torch_build(home, id).unwrap_or_else(|| native.into())) } else { Value::from(false) };
             (id.to_string(), v)
         })
         .collect::<serde_json::Map<_, _>>()

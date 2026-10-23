@@ -16,6 +16,11 @@ Chatterbox Turbo (MIT License, Resemble AI; adds an inaudible watermark to what 
 VoxCPM2 (Apache License 2.0, OpenBMB)
 Audio8 TTS Preview (Apache License 2.0, Audio8)
 NeuTTS Air (Apache License 2.0, Neuphonic)
+Fish Audio Drama 3 (Fish Audio Community License v1.0; Built with Fish Audio. GGUF package by Jmica, LICENSE and
+  NOTICE saved with the model in Mimic's engines folder. Free for research and non-commercial use; commercial use only
+  under US$500k annual revenue, and hosted TTS or voice-cloning services need a separate license.)
+  Runs on audio.cpp (Apache License 2.0, Copyright 2026 ShugoAI LLC), downloaded with its CUDA runtime libraries
+  (NVIDIA CUDA Toolkit EULA).
 Breeze TTS 2 (BreezeBlue Research and Non-Commercial License; set up by hand, not downloaded by Mimic)
 Fish S2 Pro (Fish Audio research license, see its model card; set up by hand, not downloaded by Mimic)
 

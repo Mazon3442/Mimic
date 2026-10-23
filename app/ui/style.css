@@ -177,6 +177,7 @@ textarea.transcript:disabled { color: var(--ink-3); }
 .chip.drop { padding: 5px 10px 5px 12px; }
 .chip.drop::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-3px) rotate(45deg); }
 .chip.drop[aria-expanded="true"] { background: var(--surface-3); color: var(--ink); }
+.tag.speaker { box-shadow: inset 2px 0 0 var(--live); color: var(--ink); }
 .tag.skip { background: transparent; box-shadow: inset 0 0 0 1px var(--ink-3); color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
 
 /* composer: one panel that says what will happen, and the button that does it */
@@ -194,6 +195,7 @@ textarea.transcript:disabled { color: var(--ink-3); }
 .preflight { color: var(--ink-3); font-size: 13px; min-height: 19px; }
 .preflight.block { color: var(--warn); }
 .preflight.wait { color: var(--ink-2); }
+.preflight.risk { color: var(--warn); }
 .preflight button { text-decoration: underline; text-underline-offset: 3px; color: inherit; padding: 0; }
 .instr { width: 100%; padding: 8px 10px; background: var(--field); border: 1px solid var(--field-line); border-radius: var(--r); }
 .instr[hidden] { display: none; }
@@ -206,7 +208,7 @@ textarea.transcript:disabled { color: var(--ink-3); }
 @media (hover: hover) and (pointer: fine) { .link:hover:not(:disabled) { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; } }
 
 /* menus open from their trigger */
-.menu { position: fixed; z-index: 10; min-width: 260px; max-width: 360px; padding: 6px; background: var(--surface-3); border-radius: var(--r-lg); box-shadow: 0 16px 40px rgba(0,0,0,.4); display: none;
+.menu { position: fixed; z-index: 10; min-width: 260px; max-width: 360px; overflow-y: auto; overscroll-behavior: contain; padding: 6px; background: var(--surface-3); border-radius: var(--r-lg); box-shadow: 0 16px 40px rgba(0,0,0,.4); display: none;
   transform-origin: var(--origin, bottom left); transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out); }
 .menu.open { display: block; @starting-style { opacity: 0; transform: scale(0.97); } }
 .menu-title { padding: 8px 10px 6px; color: var(--ink-3); font-size: 12px; }
@@ -447,6 +449,9 @@ body.dropping .app::after { content: "Drop audio to make a new voice"; position:
 .ctl-reset { color: var(--ink-3); font-size: 12px; padding: 0 2px; }
 @media (hover: hover) and (pointer: fine) { .ctl-reset:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; } }
 .ctl p { color: var(--ink-3); font-size: 12px; }
+.ctl .ctl-rec { color: var(--ink-2); }
+.ctl .ctl-warn { color: var(--live); }
+.ctl .ctl-warn[hidden] { display: none; }
 .ctl .row { flex-wrap: nowrap; }
 .ctl-none { color: var(--ink-2); padding: 4px 10px 8px; font-size: 13px; }
 .ctl-group { color: var(--ink-3); font-size: 12px; padding: 10px 4px 2px; }

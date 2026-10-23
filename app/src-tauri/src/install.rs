@@ -51,6 +51,34 @@ from huggingface_hub import snapshot_download
 snapshot_download("ResembleAI/chatterbox-turbo", local_dir=r"{dir}", ignore_patterns=["s3gen.safetensors"])
 "#;
 
+/// Drama 3 runs on audio.cpp, a native runtime: its CUDA release and CUDA libraries are unpacked into the model folder,
+/// with the libraries moved next to the server so it finds them.
+const DRAMA3_RUNTIME: &str = r#"
+import pathlib, shutil, urllib.request, zipfile
+base = "https://github.com/0xShug0/audio.cpp/releases/download/v0.9.2-drama3-base-small/audio-v0.9.2-drama3-base-small-"
+root = pathlib.Path(r"{dir}") / "audio.cpp"
+root.mkdir(parents=True, exist_ok=True)
+for part in ("bin", "cudart"):
+    if (root / part).is_dir():
+        continue
+    archive, staging = root / (part + ".zip"), root / (part + ".part")
+    urllib.request.urlretrieve(base + part + "-windows-x64-cuda13.3.zip", archive)
+    shutil.rmtree(staging, ignore_errors=True)
+    zipfile.ZipFile(archive).extractall(staging)
+    staging.rename(root / part)
+    archive.unlink()
+server = next((root / "bin").rglob("audiocpp_server.exe")).parent
+for dll in (root / "cudart").rglob("*.dll"):
+    if not (server / dll.name).exists():
+        shutil.move(str(dll), server / dll.name)
+"#;
+
+/// Q4 experts with an 8-bit backbone: the best quality that fits a 16 GB card with expert layers in RAM.
+const DRAMA3_FETCH: &str = r#"
+from huggingface_hub import snapshot_download
+snapshot_download("Jmica/Drama-3-GGUF", local_dir=r"{dir}", allow_patterns=["drama-3-backbone-8bit-experts-Q4_K_S.gguf", "LICENSE", "NOTICE"])
+"#;
+
 fn recipe(id: &str) -> Option<Recipe> {
     let qwen = |repo: &'static str, folder: &'static str| Recipe {
         env: "qwen-env",
@@ -120,6 +148,17 @@ fn recipe(id: &str) -> Option<Recipe> {
                 ("Downloading the model", Step::Fetch("Audio8/Audio8-TTS-Preview-0.6b")),
             ],
         }),
+        // audio.cpp publishes its Drama 3 CUDA build for Windows; Linux would need its own build.
+        "drama3" if cfg!(windows) => Some(Recipe {
+            env: "drama3-env",
+            model: Some("Drama-3"),
+            steps: vec![
+                ("Creating the Python environment", Step::Venv("3.12")),
+                ("Installing the downloader", Step::Pip(&["huggingface_hub"])),
+                ("Downloading audio.cpp (about 850 MB)", Step::Script(DRAMA3_RUNTIME)),
+                ("Downloading the model (about 23 GB)", Step::Script(DRAMA3_FETCH)),
+            ],
+        }),
         "stt" => Some(Recipe {
             env: "stt-env",
             model: None,
@@ -176,7 +215,7 @@ pub fn is_installed(home: &Path, id: &str) -> bool {
 }
 
 pub fn downloadable() -> &'static [&'static str] {
-    &["kitten", "qwen06", "qwen17", "chatterbox", "voxcpm", "audio8", "neutts", "stt"]
+    &["kitten", "qwen06", "qwen17", "chatterbox", "voxcpm", "audio8", "neutts", "drama3", "stt"]
 }
 
 fn torch_args(device: &str) -> Vec<&'static str> {
