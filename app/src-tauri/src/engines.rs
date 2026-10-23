@@ -28,7 +28,7 @@ pub struct Paths {
     pub scripts: PathBuf,
     pub logs: PathBuf,
     pub takes: PathBuf,
-    /// Where models run: "cuda", "rocm" (AMD GPU), "xpu" (Intel GPU) or "cpu". Workers get the PyTorch device as MIMIC_DEVICE.
+    /// Where models run: "cuda", "rocm" (AMD GPU), "xpu" (Intel GPU), "mps" (Apple Silicon) or "cpu". Workers get the PyTorch device as MIMIC_DEVICE.
     pub device: String,
     /// Extra environment for the engine on this device (ROCm's GPU choice and compatibility target).
     pub device_env: Vec<(String, String)>,
@@ -125,6 +125,10 @@ impl Manager {
             ("HF_HUB_DISABLE_SYMLINKS_WARNING", "1".to_string()),
             ("HF_TOKEN", paths.hf_token.clone()),
         ];
+        if paths.device == "mps" {
+            // Metal doesn't implement every op the engines use; let those fall back to the CPU instead of failing.
+            envs.push(("PYTORCH_ENABLE_MPS_FALLBACK", "1".to_string()));
+        }
         envs.extend(paths.device_env.iter().map(|(k, v)| (k.as_str(), v.clone())));
         let start_py = |env: &str, script: &str, args: &[&str]| {
             Worker::start(&paths.python(env), &paths.workers.join(script), args, &envs, &paths.logs.join(format!("{engine}.log")), LOAD_TIMEOUT)

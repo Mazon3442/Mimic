@@ -40,10 +40,15 @@
     "category": "Music",
     "shortDescription": "Local voice cloning",
     "longDescription": "Write a script, pick a voice profile, and generate speech with KittenTTS, Qwen3-TTS, NeuTTS and more, on your own GPU or CPU.",
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico", "icons/icon.icns"],
     "linux": {
       "deb": { "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "ffmpeg"] },
       "rpm": { "depends": ["webkit2gtk4.1", "gtk3", "ffmpeg"] }
+    },
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist"
     },
     "resources": {
       "../../engines/": "engines/",

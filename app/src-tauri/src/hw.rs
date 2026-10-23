@@ -15,9 +15,9 @@ use sysinfo::System;
 pub struct Hardware {
     /// GPU name, e.g. "NVIDIA GeForce RTX 5070 Ti" or "Intel Iris Xe Graphics". Empty if none was found.
     pub gpu: String,
-    /// "nvidia" | "amd" | "intel" | ""
+    /// "nvidia" | "amd" | "intel" | "apple" | ""
     pub vendor: String,
-    /// Where Automatic runs models on this PC: "cuda" | "rocm" | "xpu" | "cpu".
+    /// Where Automatic runs models on this PC: "cuda" | "rocm" | "xpu" | "mps" | "cpu".
     pub accel: String,
     /// Where the GPU setting runs them; differs from `accel` for experimental GPUs (Radeon integrated graphics).
     /// Empty when no GPU here can run models.
@@ -271,7 +271,7 @@ pub fn snapshot(sys: &mut System) -> Hardware {
         "amd" if !c.amd_slot.is_empty() => amd_vram(&c.amd_slot),
         _ => (0.0, 0.0),
     };
-    Hardware {
+    let hw = Hardware {
         gpu: c.gpu,
         vendor: c.vendor,
         accel: c.accel,
@@ -285,7 +285,31 @@ pub fn snapshot(sys: &mut System) -> Hardware {
         ram_total: sys.total_memory() as f64 / GIB,
         ram_used: sys.used_memory() as f64 / GIB,
         rocm_env: c.rocm_env,
+    };
+    apple_silicon(hw)
+}
+
+/// Apple Silicon Macs run models on the GPU through Metal ("mps"). CPU and GPU share one pool of memory, so the
+/// memory bar shows RAM and an engine has to fit in it.
+#[cfg(target_os = "macos")]
+fn apple_silicon(hw: Hardware) -> Hardware {
+    if std::env::consts::ARCH != "aarch64" {
+        return Hardware { note: "Intel Macs run engines on the CPU.".into(), ..hw };
     }
+    Hardware {
+        gpu: if hw.cpu.is_empty() { "Apple Silicon".into() } else { format!("{} (Metal)", hw.cpu) },
+        vendor: "apple".into(),
+        accel: "mps".into(),
+        gpu_accel: "mps".into(),
+        note: String::new(),
+        fix: String::new(),
+        ..hw
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apple_silicon(hw: Hardware) -> Hardware {
+    hw
 }
 
 /// Where models run, from the setting ("Automatic" | "GPU" | "CPU") and what this PC has.

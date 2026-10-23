@@ -160,10 +160,10 @@ function log(msg, error = false) {
 }
 
 // ---------- fit and readiness ----------
-// Where models run, as decided by the core: "cuda" (NVIDIA), "rocm" (AMD GPU), "xpu" (Intel GPU) or "cpu".
+// Where models run, as decided by the core: "cuda" (NVIDIA), "rocm" (AMD GPU), "xpu" (Intel GPU), "mps" (Apple Silicon) or "cpu".
 let device = "cuda";
 let platform = "windows";
-const DEVICE_NAME = { cuda: "GPU", rocm: "AMD GPU", xpu: "Intel GPU", cpu: "CPU" };
+const DEVICE_NAME = { cuda: "GPU", rocm: "AMD GPU", xpu: "Intel GPU", mps: "Apple GPU", cpu: "CPU" };
 // Memory an engine needs where it will run: VRAM on a graphics card, shared RAM on integrated GPUs, RAM on the CPU.
 const memFor = id => (device === "cpu" || ENGINES[id].cpuOnly ? ENGINES[id].cpuGb : ENGINES[id].gb);
 const onVram = () => (device === "cuda" || device === "rocm") && hw.vramTotal > 0;
@@ -1123,7 +1123,7 @@ function renderSettings() {
   const date = new Date().toISOString().slice(0, 10);
   $("#settingsBody").innerHTML =
     section("Appearance",
-      row("Theme", caelestia ? "Caelestia follows your shell's colors and wallpaper." : `Dark, light, or follow ${platform === "windows" ? "Windows" : "the system"}.`,
+      row("Theme", caelestia ? "Caelestia follows your shell's colors and wallpaper." : `Dark, light, or follow ${platform === "windows" ? "Windows" : platform === "macos" ? "macOS" : "the system"}.`,
         SET.seg("theme", caelestia ? ["Caelestia", "Dark", "Light", "System"] : ["Dark", "Light", "System"])) +
       row("Script text size", "How big the words you're writing look.", SET.seg("scriptSize", ["Small", "Medium", "Large"]))) +
     section("Commands",

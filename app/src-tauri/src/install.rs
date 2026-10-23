@@ -185,7 +185,7 @@ fn marker(home: &Path, env: &str, id: &str) -> PathBuf {
     home.join(env).join(format!(".mimic-installed-{id}"))
 }
 
-/// Which PyTorch build an engine's environment has ("cuda" | "rocm" | "xpu" | "cpu"), read from the installed
+/// Which PyTorch build an engine's environment has ("cuda" | "rocm" | "xpu" | "mps" | "cpu"), read from the installed
 /// torch's version tag (torch-2.11.0+cu128.dist-info), so it's right however and whenever the engine was installed.
 /// None when the environment has no PyTorch.
 pub fn torch_build(home: &Path, id: &str) -> Option<String> {
@@ -203,6 +203,7 @@ pub fn torch_build(home: &Path, id: &str) -> Option<String> {
         t if t.starts_with("rocm") => "rocm",
         t if t.starts_with("xpu") => "xpu",
         "" if cfg!(target_os = "linux") => "cuda", // plain PyPI torch is the CUDA build on Linux
+        "" if cfg!(target_os = "macos") && std::env::consts::ARCH == "aarch64" => "mps", // and the Metal build on Apple Silicon
         _ => "cpu",
     }.to_string())
 }
@@ -219,6 +220,9 @@ pub fn downloadable() -> &'static [&'static str] {
 }
 
 fn torch_args(device: &str) -> Vec<&'static str> {
+    if cfg!(target_os = "macos") {
+        return vec![TORCH, TORCHAUDIO]; // PyPI's macOS builds include Metal (mps)
+    }
     let index = match device {
         "cuda" => "https://download.pytorch.org/whl/cu128",
         "rocm" => "https://download.pytorch.org/whl/rocm7.2", // Linux only; AMD GPUs
@@ -250,6 +254,8 @@ fn uv() -> Result<PathBuf, String> {
         .ok_or_else(|| {
             if cfg!(windows) {
                 "Downloading engines needs uv. Install it with: winget install astral-sh.uv".into()
+            } else if cfg!(target_os = "macos") {
+                "Downloading engines needs uv. Install it with: brew install uv".into()
             } else {
                 "Downloading engines needs uv. On Arch: sudo pacman -S uv".into()
             }

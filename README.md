@@ -6,11 +6,11 @@
   <img alt="Mimic: local voice cloning on your own GPU or CPU" src="docs/assets/brand/banner-dark.svg" width="100%">
 </picture>
 
-**Clone a voice from a few seconds of audio and make it say anything.<br>Runs on your own GPU or CPU, on Windows and Linux. Nothing leaves your computer.**
+**Clone a voice from a few seconds of audio and make it say anything.<br>Runs on your own GPU or CPU, on Windows, Linux and Apple Silicon Macs. Nothing leaves your computer.**
 
 [![Release](https://img.shields.io/github/v/release/Mazon3442/Mimic?style=flat-square&color=ff4733&label=release)](https://github.com/Mazon3442/Mimic/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-3987e5?style=flat-square)](LICENSE)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-555?style=flat-square)](#install)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-555?style=flat-square)](#install)
 [![Built with Tauri 2 and Rust](https://img.shields.io/badge/built%20with-Tauri%202%20%2B%20Rust-24C8DB?style=flat-square&logo=tauri&logoColor=white)](https://tauri.app)
 
 [Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Engines](#engines) · [How it works](#how-it-works) · [Build from source](#build-from-source) · [Responsible use](#responsible-use) · [Privacy](#privacy)
@@ -30,7 +30,7 @@
 | **Voice profiles** | Record a voice by reading a short passage, import a clip, or drop audio files onto the window. Each profile keeps its clip, transcript and favorite settings. |
 | **Automatic transcripts** | Clips are transcribed on your machine with faster-whisper, so engines that need the exact words get them without typing. |
 | **Ten engines, one window** | KittenTTS 2, Breeze TTS 2, Fish S2 Pro, Fish Audio Drama 3, Qwen3-TTS 0.6B and 1.7B, Chatterbox Turbo, VoxCPM2, Audio8 TTS Preview, and NeuTTS Air (Linux). Download, remove and pin them from Settings › Engines. |
-| **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an AMD Radeon GPU on Linux (ROCm, experimental), an Intel Arc GPU (experimental) or the CPU. If a driver or runtime is missing, it says which package to install for your distro. The bar at the top shows real VRAM or RAM use. |
+| **GPU or CPU** | Mimic detects the hardware and runs models on an NVIDIA GPU, an AMD Radeon GPU on Linux (ROCm, experimental), an Intel Arc GPU (experimental), Apple Silicon (Metal) or the CPU. If a driver or runtime is missing, it says which package to install for your distro. The bar at the top shows real VRAM or RAM use. |
 | **One engine in memory** | Switching engines unloads the old one first, and idle engines unload after a set time, so the GPU is free for everything else. |
 | **Nothing saved behind your back** | Takes stay in a temporary cache until you press Save (Ctrl+S) or Save as (Ctrl+Shift+S). WAV, FLAC or MP3. |
 | **Compare engines** | Generate the same line with every engine that fits, optionally blind, and keep the best take. |
@@ -57,6 +57,7 @@
 | **Fedora** | `.rpm` from Releases |
 | **Any Linux** | `.AppImage` from Releases |
 | **Arch Linux** | `cd packaging/arch && makepkg -si` (builds the release set in `pkgver`) |
+| **macOS 14+ (Apple Silicon)** | `.dmg` from Releases *(early: not yet tested as widely as Windows and Linux)*. Fish S2 Pro and Drama 3 are Windows-only, NeuTTS Air Linux-only |
 
 Mimic also needs two command-line tools: **[uv](https://docs.astral.sh/uv/)** to download engines, and **ffmpeg** to import and convert audio.
 
@@ -64,6 +65,7 @@ Mimic also needs two command-line tools: **[uv](https://docs.astral.sh/uv/)** to
 winget install astral-sh.uv                               # Windows
 winget install Gyan.FFmpeg
 sudo pacman -S --needed uv ffmpeg pciutils xdg-user-dirs  # Arch
+brew install uv ffmpeg                                    # macOS
 ```
 
 ## Quick start
@@ -72,6 +74,8 @@ sudo pacman -S --needed uv ffmpeg pciutils xdg-user-dirs  # Arch
 2. Download **speech-to-text** from the same list, so transcripts write themselves.
 3. Press **Record**, type your name and read the short passage, or drop a 3–30 second clip of one speaker onto the window.
 4. Type a script, press **Ctrl+Enter**, then **Space** to listen and **Ctrl+S** to keep the take.
+
+On a Mac, use **Cmd** wherever this page says Ctrl.
 
 Only clone voices you have permission to use. Mimic asks you to confirm this once, before your first clone.
 
@@ -113,7 +117,7 @@ Only clone voices you have permission to use. Mimic asks you to confirm this onc
 </picture>
 </div>
 
-Each engine lives in its own Python environment, or for Drama 3 its own native audio.cpp build, so their dependencies never collide. The Rust core keeps one engine in memory at a time, and puts every engine process in a job (Windows) or process group (Linux) that ends with Mimic. Even a crash can't leave a model holding your VRAM.
+Each engine lives in its own Python environment, or for Drama 3 its own native audio.cpp build, so their dependencies never collide. The Rust core keeps one engine in memory at a time, and puts every engine process in a job (Windows) or process group (Linux and macOS) that ends with Mimic. On Windows and Linux, even a crash can't leave a model holding your VRAM.
 
 <details>
 <summary><b>Linux, Caelestia and Hyprland</b></summary>
@@ -163,7 +167,7 @@ Engines, their Python environments and model files live in one folder (Settings 
 | | Default |
 | --- | --- |
 | Windows | `%USERPROFILE%\tts` |
-| Linux | `~/.local/share/mimic/engines` |
+| Linux and macOS | `~/.local/share/mimic/engines` |
 
 ```text
 qwen-env/   models/Qwen3-TTS-12Hz-0.6B-Base/   models/Qwen3-TTS-12Hz-1.7B-Base/
@@ -223,12 +227,13 @@ Settings › **Use from another device** shares this PC's Mimic with a browser o
 
 ## Build from source
 
-Needs Rust (stable) and Node.js. On Windows, also the Microsoft C++ Build Tools. On Linux, WebKitGTK 4.1:
+Needs Rust (stable) and Node.js. On Windows, also the Microsoft C++ Build Tools. On Linux, WebKitGTK 4.1. On macOS, the Xcode command line tools:
 
 ```bash
 sudo pacman -S --needed webkit2gtk-4.1 base-devel rust nodejs npm   # Arch
 sudo apt install build-essential pkg-config libssl-dev libxdo-dev libwebkit2gtk-4.1-dev \
   libayatana-appindicator3-dev librsvg2-dev nodejs npm                 # Debian / Ubuntu
+xcode-select --install                                               # macOS
 ```
 
 ```bash
@@ -237,6 +242,7 @@ cargo run                                                # development build (ne
 cargo run --release                                      # optimized build, as shipped
 npx @tauri-apps/cli@2 build                              # Windows installer in target/release/bundle/nsis
 npx @tauri-apps/cli@2 build --bundles deb,rpm,appimage   # Linux packages
+npx @tauri-apps/cli@2 build --bundles app,dmg            # macOS app and dmg
 ```
 
 The interface (`app/ui`) is packed into the app at build time, so run it again after editing it. After changing Rust dependencies, regenerate the license notices that ship with the app:
@@ -246,7 +252,7 @@ cargo install cargo-about --features cli                         # once
 cargo about generate about.hbs -o ../../THIRD-PARTY-NOTICES.md   # from app/src-tauri
 ```
 
-Releases come from GitHub Actions: push an annotated tag such as `v1.2.0` and `.github/workflows/release.yml` builds the Windows installer and the Linux `.deb`, `.rpm` and AppImage, signs them and publishes one release with a `latest.json`. Installed copies check that file on start and offer the update (Settings › About too). Signing needs the repository secret `TAURI_SIGNING_PRIVATE_KEY`, the private half of the `pubkey` in `tauri.conf.json`. Arch builds from the PKGBUILD are told about new versions but update through `makepkg`.
+Releases come from GitHub Actions: push an annotated tag such as `v1.2.0` and `.github/workflows/release.yml` builds the Windows installer, the Linux `.deb`, `.rpm` and AppImage and the macOS `.dmg`, signs them and publishes one release with a `latest.json`. Installed copies check that file on start and offer the update (Settings › About too). Signing needs the repository secret `TAURI_SIGNING_PRIVATE_KEY`, the private half of the `pubkey` in `tauri.conf.json`; the macOS build is also signed and notarized when the `APPLE_*` secrets are set. Arch builds from the PKGBUILD are told about new versions but update through `makepkg`.
 
 <details>
 <summary><b>Repository layout</b></summary>

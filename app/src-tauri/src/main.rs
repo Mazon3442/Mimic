@@ -432,7 +432,9 @@ fn ui_error(app: State<'_, Shared>, message: String) {
 fn reveal(path: String) {
     #[cfg(windows)]
     let _ = std::process::Command::new("explorer").arg(format!("/select,{path}")).spawn();
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg("-R").arg(&path).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
     {
         let dir = Path::new(&path).parent().map(Path::to_path_buf).unwrap_or_default();
         let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
@@ -471,7 +473,9 @@ fn open_tailscale_page(url: String) -> Result<(), String> {
     }
     #[cfg(windows)]
     let opened = std::process::Command::new("rundll32").args(["url.dll,FileProtocolHandler", &url]).spawn();
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
+    let opened = std::process::Command::new("open").arg(&url).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
     let opened = std::process::Command::new("xdg-open").arg(&url).spawn();
     opened.map(|_| ()).map_err(|e| format!("couldn't open the browser: {e}"))
 }
@@ -537,7 +541,7 @@ fn remote_call(h: &AppHandle, cmd: &str, args: Value) -> Result<Value, String> {
     }
 }
 
-/// Which engines Mimic downloaded itself (and so may delete): false, or the PyTorch build it has ("cuda", "rocm", "xpu", "cpu").
+/// Which engines Mimic downloaded itself (and so may delete): false, or the PyTorch build it has ("cuda", "rocm", "xpu", "mps", "cpu").
 fn managed(home: &Path) -> Value {
     install::downloadable()
         .iter()
@@ -611,9 +615,13 @@ fn resources_dir(handle: &AppHandle) -> PathBuf {
 
 /// `mimic --install <engine>` downloads an engine without opening the window (used for testing and scripting).
 fn cli_install(id: &str) -> ! {
-    // Same folders Tauri uses: %APPDATA% / %LOCALAPPDATA% on Windows, $XDG_DATA_HOME on Linux.
+    // Same folders Tauri uses: %APPDATA% / %LOCALAPPDATA% on Windows, $XDG_DATA_HOME on Linux, and
+    // ~/Library/Application Support on macOS (where app_data_dir and app_local_data_dir both point).
     let (data, local) = if cfg!(windows) {
         (std::env::var("APPDATA").unwrap_or_default(), std::env::var("LOCALAPPDATA").unwrap_or_default())
+    } else if cfg!(target_os = "macos") {
+        let base = format!("{}/Library/Application Support", std::env::var("HOME").unwrap_or_default());
+        (base.clone(), base)
     } else {
         let d = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{}/.local/share", std::env::var("HOME").unwrap_or_default()));
         (d.clone(), d)
@@ -637,6 +645,16 @@ fn cli_install(id: &str) -> ! {
 }
 
 fn main() {
+    // Apps opened from Finder get only /usr/bin:/bin:/usr/sbin:/sbin, so Homebrew's ffmpeg, uv and tailscale
+    // would go unfound. Add Homebrew's folders (Apple Silicon, then Intel).
+    #[cfg(target_os = "macos")]
+    {
+        let path = std::env::var("PATH").unwrap_or_default();
+        let missing: Vec<&str> = ["/opt/homebrew/bin", "/usr/local/bin"].into_iter().filter(|d| !path.split(':').any(|p| p == *d)).collect();
+        if !missing.is_empty() {
+            std::env::set_var("PATH", format!("{path}:{}", missing.join(":")));
+        }
+    }
     let args: Vec<String> = std::env::args().collect();
     if let Some(i) = args.iter().position(|a| a == "--install") {
         cli_install(args.get(i + 1).map(String::as_str).unwrap_or(""));

@@ -211,6 +211,11 @@ fn tailscale() -> Option<PathBuf> {
     if cfg!(windows) && installed.is_file() {
         return Some(installed);
     }
+    // The Mac app (App Store or standalone) keeps its command-line tool inside the bundle.
+    let mac = PathBuf::from("/Applications/Tailscale.app/Contents/MacOS/Tailscale");
+    if cfg!(target_os = "macos") && mac.is_file() {
+        return Some(mac);
+    }
     let mut probe = Command::new("tailscale");
     probe.arg("version").stdout(Stdio::null()).stderr(Stdio::null());
     crate::worker::hidden(&mut probe);

@@ -63,8 +63,8 @@ pub fn kill_tree(child: &mut Child) {
 }
 
 /// Every child process Mimic starts goes through here.
-/// Windows: no console window. Linux: its own process group (so `kill_tree` gets its children too),
-/// and a death signal so it dies with Mimic even if Mimic crashes.
+/// Windows: no console window. Linux and macOS: its own process group (so `kill_tree` gets its children too).
+/// Linux also sets a death signal so it dies with Mimic even if Mimic crashes; macOS has no equivalent.
 pub fn hidden(cmd: &mut Command) -> &mut Command {
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
@@ -72,6 +72,10 @@ pub fn hidden(cmd: &mut Command) -> &mut Command {
     {
         use std::os::unix::process::CommandExt;
         cmd.process_group(0);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::process::CommandExt;
         unsafe {
             cmd.pre_exec(|| {
                 libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
